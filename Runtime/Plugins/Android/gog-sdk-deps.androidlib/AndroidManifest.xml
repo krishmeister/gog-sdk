@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Bare shell. The bundled gog-sdk-android-core.aar already declares INTERNET, the
+     <queries> entry for online.godofgaming.hub, and GogHubAuthProxyActivity — do NOT
+     duplicate them here (the manifest merger would only re-add what already merges).
+     namespace lives in build.gradle (AGP 8+); this manifest needs no package attr. -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android" />

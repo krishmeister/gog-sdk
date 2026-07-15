@@ -1,0 +1,39 @@
+// GOG SDK — deps-only Android library.
+//
+// Its ONLY job: put the SDK core's two Maven runtime deps on the app's Gradle
+// classpath so a partner never hand-edits mainTemplate.gradle. It ships no source
+// and declares no manifest components — the bundled .aar already carries INTERNET,
+// the <queries> entry for online.godofgaming.hub, and GogHubAuthProxyActivity.
+//
+// compileSdk: read from Unity's own `unity.compileSdkVersion` gradle property (Unity
+// writes it into the generated gradle.properties on every Android build). Gradle
+// properties propagate to every subproject — unlike Unity template tokens such as
+// **APIVERSION**, which are NOT substituted inside a package .androidlib. Reading it
+// makes this module's compileSdk EQUAL the app's, so AGP's "consumer >= dependency
+// compileSdk" rule holds by construction on any partner Unity version. A 34 fallback
+// covers the (unobserved) case where the property is absent. Verified on Unity
+// 6000.4 / AGP 9.0.0: the property resolves (GOG_COMPILESDK_RESOLVED=36) and the app
+// builds with EncryptedSharedPreferences / kotlin-stdlib / Tink in the APK dex.
+// (Omitting compileSdk hard-fails under AGP 9: "does not specify compileSdk".)
+//
+// No `repositories { }` block: settings.gradle uses RepositoriesMode.PREFER_SETTINGS
+// with google() + mavenCentral(), which this module inherits.
+apply plugin: 'com.android.library'
+
+// Compute in a def, then assign — NOT inline in `compileSdk (...)`. Groovy parses an
+// inline `compileSdk EXPR.toInteger()` as `compileSdk(EXPR).toInteger()`, passing a
+// String and leaving compileSdk unset ("Value is null" / "does not specify compileSdk").
+def _unitySdk = project.findProperty('unity.compileSdkVersion')
+def _compileSdk = ((_unitySdk ?: '34') as String).toInteger()
+
+android {
+    namespace "online.godofgaming.gogsdk.deps"   // MUST differ from the .aar's com.gog.sdk
+    compileSdk _compileSdk
+    sourceSets { main { manifest.srcFile 'AndroidManifest.xml' } }
+    // No minSdk — the .aar declares minSdk 24; the manifest merger reconciles.
+}
+
+dependencies {
+    implementation 'androidx.security:security-crypto:1.1.0-alpha06'
+    implementation 'org.jetbrains.kotlin:kotlin-stdlib:2.0.20'
+}

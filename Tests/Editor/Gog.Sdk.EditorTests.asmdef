@@ -1,0 +1,25 @@
+{
+    "name": "Gog.Sdk.EditorTests",
+    "rootNamespace": "Gog.Sdk.Editor.Tests",
+    "references": [
+        "Gog.Sdk",
+        "Gog.Sdk.Editor",
+        "UnityEngine.TestRunner",
+        "UnityEditor.TestRunner"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": true,
+    "precompiledReferences": [
+        "nunit.framework.dll"
+    ],
+    "autoReferenced": false,
+    "defineConstraints": [
+        "UNITY_INCLUDE_TESTS"
+    ],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

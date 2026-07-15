@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  GOG SDK — optional Google Mobile Ads dependency for the External Dependency Manager
+  for Unity (EDM4U). LIVE as of the ad-platform consolidation (docs/sdk-api-contract.md
+  §9); revives the afc38a8 draft as the GMA distribution mechanism.
+
+  Read ONLY by EDM4U: a consuming project WITHOUT EDM4U treats this as an inert XML
+  asset — nothing resolves, nothing is forced on partners who don't serve AdMob, and
+  contract I7 makes a missing GMA package a NoAd at runtime, never a crash.
+
+  Deliberately does NOT declare the native core's own dependencies (security-crypto /
+  Tink): those ship in the vendored gog-sdk-deps.androidlib (d8e6759). Different
+  layers — the androidlib declares OUR hard deps inside the package; this file
+  declares the APP's optional GMA dep for partners who serve AdMob.
+-->
+<dependencies>
+  <androidPackages>
+    <!-- Google Mobile Ads native SDK — needed only by AdMob-serving games. Keep the
+         major version in step with the GMA Unity plugin imported at the render step. -->
+    <androidPackage spec="com.google.android.gms:play-services-ads:24.4.0" />
+  </androidPackages>
+</dependencies>

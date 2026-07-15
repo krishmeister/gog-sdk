@@ -1,0 +1,19 @@
+{
+  "name": "com.gog.sdk",
+  "version": "0.1.0",
+  "displayName": "GOG SDK",
+  "description": "GOG auto sign-in SDK — Android slice (SSO code exchange + session lifecycle). Bundles the native core .aar and its Gradle dependencies.",
+  "unity": "6000.0",
+  "keywords": ["gog", "auth", "sso"],
+  "author": { "name": "GOG" },
+  "dependencies": {
+    "com.unity.nuget.newtonsoft-json": "3.2.1"
+  },
+  "samples": [
+    {
+      "displayName": "Sign-in & Coins",
+      "description": "The complete recommended integration in one file: initialize, the boot rule (CurrentSession + events), Sign in with GOG, the shared coin wallet, and the GogResult error pattern.",
+      "path": "Samples~/SignInAndCoins"
+    }
+  ]
+}
