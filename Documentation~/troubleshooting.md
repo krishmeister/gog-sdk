@@ -56,6 +56,37 @@ temporary knobs and go away when the migration completes).
 **Fix:** add the `Enable()` call, or match the host per the warning. The warning line
 always tells you which of the two you're in.
 
+## Sign-in doesn't work after the game launches from the hub — and there's no error
+
+**Symptom:** the player taps your game in the GOG hub, the game launches, but no sign-in
+happens — and unlike the case above there is **no warning in your logs and no error on
+either side**. It silently does nothing.
+**Cause:** your game's App Link is not *verifying*, so Android never hands the signed
+sign-in link to your game. App Link verification requires the signing certificate
+registered for your game to match the certificate the **shipped** APK is actually signed
+with — and the number-one way they diverge is Google Play App Signing. When you upload to
+Play, Google **re-signs** your app with the Play App Signing key, so the certificate the
+installed app carries is the *Play App Signing* key's — **not** your upload key's. If the
+fingerprint registered for your game was the upload key's, the App Link silently never
+verifies, and sign-in fails with no error on either side.
+**Fix:** register the **Play App Signing** certificate's SHA-256 for your game — copy it
+from *Play Console → your app → App integrity → App signing* (the *app signing key
+certificate*, not the upload key certificate). For a sideloaded or debug build, which
+Play never re-signs, register that build's own signing fingerprint instead. Once the
+registered fingerprint matches the certificate the shipped APK is signed with, the App
+Link verifies and the launch hands off cleanly.
+
+## The app appears signed in right after a "clean" reinstall
+
+**Symptom:** during QA you `adb shell pm clear` the app (or uninstall) and then
+`adb install -r`, expecting a signed-out slate — but the app boots already signed in.
+**Cause:** this is a test-environment gotcha, **not** an SDK bug. Google's
+restore-at-install can asynchronously replant the app's data (including the encrypted
+session) in the window right after the clear, so `pm clear` + reinstall is **not** a
+reliable sign-out on consumer Android. **Fix:** to get a genuine signed-out state, use the
+in-app sign-out (`GogAuth.SignOut()`), or `pm clear` **without** a reinstall, and confirm
+the real state from `GogAuth.CurrentSession` rather than assuming the clear took.
+
 ## Something else?
 
 Log output is your first stop — the SDK logs its decisions under the `Unity` logcat

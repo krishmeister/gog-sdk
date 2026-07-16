@@ -16,6 +16,21 @@ Play Mode) the SDK compiles and initializes, and every call completes with an
 `UnsupportedPlatform` error result — so you can leave the integration code in
 multi-platform builds unguarded.
 
+> **Requirement — ship on your own unique application id.** Every GOG game **must**
+> ship with its own unique Android application id (package name). This is a requirement,
+> not a recommendation: the sign-in return from the GOG hub arrives as an Android App
+> Link, and Android routes that link to an app *by its application id*. If two GOG games
+> share one, Android cannot tell which game the sign-in belongs to — the return is
+> delivered to the wrong game, or fails outright. There is no SDK-side workaround; the
+> routing happens in the OS, below the SDK.
+
+The classic way to get this wrong is to ship on a template's default id: a project
+created from a Unity or engine template stays `com.UnityTechnologies.*` (or the template
+author's id) until you change it, so every such project collides with every other. So
+**before your first build**, set a real, unique application id in *Player Settings →
+Player → Other Settings → Identification → Package Name* (Android `applicationId`) — your
+own reverse-domain id, distinct from every other GOG game and from any template default.
+
 ## 2. Configure — one asset, no code
 
 *Project Settings → GOG SDK* → **Create GOG SDK Settings**, then set:
@@ -186,6 +201,16 @@ Why both halves matter:
   player was in the hub, the SDK completes the exchange headlessly when your game comes
   back, and the result reaches you as `OnSignedIn` (or `OnLaunchSignInFailed`) — there
   is no call-site callback anymore, because that code died with the old process.
+
+> **Do not assume the sign-in completes in the same process that started it.** On
+> low-memory Android — cheap devices, which are much of the install base — the OS
+> routinely kills your game while the player is in the hub, so the handoff finishes
+> *headlessly in a cold-started process*, not as a warm return to your callback. In
+> testing on a low-RAM device this was not an edge case — it happened on **every** hub
+> round trip. This is exactly why the boot rule exists: read `CurrentSession` on boot and
+> subscribe to `OnSignedIn`, and the headless completion reaches you with no extra code.
+> A game that only handled the warm callback would appear to "lose" sign-ins on the very
+> devices where they matter most.
 
 Follow the boot rule and both cases — restored session and headless completion — are
 handled with no extra code.
