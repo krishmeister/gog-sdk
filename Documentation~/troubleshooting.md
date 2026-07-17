@@ -76,6 +76,22 @@ Play never re-signs, register that build's own signing fingerprint instead. Once
 registered fingerprint matches the certificate the shipped APK is signed with, the App
 Link verifies and the launch hands off cleanly.
 
+## Sign-in is declined: the hub says "This game isn't registered with GOG"
+
+**Symptom:** the player taps "Sign in with GOG", the GOG hub opens, and instead of signing
+in it shows **"This game isn't registered with GOG"** and declines — even though your game
+built, installed, and launched normally.
+**Cause:** the **Game ID** in *Project Settings → GOG SDK* is a valid UUID but does not
+match a game registered in the GOG dashboard, so the hub can't find it and refuses. Because
+the ID is well-formed, the build validator passes and the handoff runs — the mismatch only
+surfaces here, at sign-in. This is **not** the certificate case above, which fails
+*silently* with no message; here the hub names the problem on screen. (The same condition
+reaches your code as the `UnknownGame` error — see the [error reference](error-reference.md).)
+**Fix:** open *Project Settings → GOG SDK* and confirm the Game ID **exactly** matches your
+game's ID in the GOG dashboard — copy it from the dashboard rather than retyping it. Then
+**rebuild**: the Game ID is baked into the build (it also drives the App-Link manifest
+injection), so a settings change takes effect only in a new build.
+
 ## The app appears signed in right after a "clean" reinstall
 
 **Symptom:** during QA you `adb shell pm clear` the app (or uninstall) and then

@@ -1,6 +1,6 @@
 {
   "name": "com.gog.sdk",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "displayName": "GOG SDK",
   "description": "GOG auto sign-in SDK — Android slice (SSO code exchange + session lifecycle). Bundles the native core .aar and its Gradle dependencies.",
   "unity": "6000.0",
