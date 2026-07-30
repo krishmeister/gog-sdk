@@ -261,6 +261,69 @@ twice. If your game has its own retry loop, use the overloads that take your own
 `idempotencyKey` — replaying the same key returns the original transaction with
 `Applied == false` instead of double-charging.
 
+### ⚠️ Retrying a win across an app restart
+
+The automatic key is generated per **call**. That is exactly right for normal use and for
+the SDK's own in-session network retries. But it also means a *second* call to the
+auto-key `Earn`/`Spend` is a brand-new, distinct transaction. So if you write your own
+"re-award this win after the game restarts" logic and call the **auto-key** overload
+again, the player is **credited twice** — the two calls carry different keys, and the
+server has no way to tell they were the same win.
+
+If (and only if) you need a win to survive the app being killed mid-write, do this:
+
+1. When the win happens, generate **one** key and **persist it yourself before the first
+   attempt**.
+2. Send it with the explicit-key overload
+   `GogCoins.Earn(amount, reason, idempotencyKey, callback)`.
+3. On success, clear the persisted key. On a later launch, if a key is still persisted,
+   resend with the **same** key — a replay returns the original transaction
+   (`Applied == false`), never a second credit.
+
+```csharp
+const string PendingKey = "gog_pending_win_key";
+const string PendingAmt = "gog_pending_win_amount";
+
+// Call this the moment the player earns the win.
+void AwardWin(long amount)
+{
+    // Generate the key ONCE and persist it BEFORE the first attempt.
+    string key = System.Guid.NewGuid().ToString();
+    PlayerPrefs.SetString(PendingKey, key);
+    PlayerPrefs.SetString(PendingAmt, amount.ToString());
+    PlayerPrefs.Save();
+    SendWin(amount, key);
+}
+
+void SendWin(long amount, string key)
+{
+    GogCoins.Earn(amount, "level-complete", key, res =>
+    {
+        if (res.Ok)   // the server has it: a fresh apply OR a safe replay
+        {
+            PlayerPrefs.DeleteKey(PendingKey);
+            PlayerPrefs.DeleteKey(PendingAmt);
+            PlayerPrefs.Save();
+            SetCoinLabel(res.Value.Balance);
+        }
+        // else: keep the persisted key and retry later — the next launch resends it.
+    });
+}
+
+// Call once after sign-in on the next launch to finish any interrupted win.
+void ResumePendingWin()
+{
+    if (!PlayerPrefs.HasKey(PendingKey)) return;
+    SendWin(long.Parse(PlayerPrefs.GetString(PendingAmt)), PlayerPrefs.GetString(PendingKey));
+}
+```
+
+**Heads-up:** the SDK does **not** yet persist or auto-retry coin writes across process
+death on its own. If the app is killed while an `Earn`/`Spend` is in flight and you have
+not implemented the pattern above, that credit may simply not land. Durable client-side
+queuing is planned for a future version — until then, use the persisted-key pattern for
+wins you can't afford to lose.
+
 ## 9. Lifecycle
 
 `GogSdk.Shutdown()` returns the SDK to its pre-init state: event subscriptions are
