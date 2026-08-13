@@ -32,6 +32,11 @@ namespace Gog.Sdk.Internal
     {
         private const int TimeoutSeconds = 12; // contract §1.4.2
 
+        // Media (ad creatives) gets its own, SHORTER budget than the JSON timeout: a slow CDN
+        // must not hold the game while it waits for a picture. Paired with no retry — re-pulling
+        // a failed download doubles the stall, and a creative that will not load is a cheap NoAd.
+        private const int MediaTimeoutSeconds = 10;
+
         /// <summary>Idempotent GET. Retries once on a transient failure. Callback is the
         /// last parameter and is required (§1.1).</summary>
         internal static void Get<T>(string url, string bearer, Action<GogResult<T>> callback)
@@ -49,6 +54,62 @@ namespace Gog.Sdk.Internal
             if (callback == null) throw new ArgumentNullException(nameof(callback));
             GogMainThreadDispatcher.Ensure();
             Send("POST", url, bearer, jsonBody, retriesLeft: idempotent ? 1 : 0, Once(callback));
+        }
+
+        /// <summary>
+        /// Fetch an image as a <see cref="Texture2D"/> — the ad-creative path. Kept HERE rather
+        /// than as a raw <c>UnityWebRequest</c> in module code so §7.3 ("all HTTP through
+        /// GogHttp") stays literally true and the download inherits the same exactly-once guard,
+        /// main-thread delivery, and exception-proof completion as every JSON call.
+        ///
+        /// <para>No retry (see <see cref="MediaTimeoutSeconds"/>), and every failure is
+        /// non-retryable: the caller turns any failure into <c>NoAd</c> per I7, so there is
+        /// nothing for a partner to retry.</para>
+        ///
+        /// <para>The returned texture is the CALLER'S to destroy.</para>
+        /// </summary>
+        internal static void GetTexture(string url, Action<GogResult<Texture2D>> callback)
+        {
+            if (callback == null) throw new ArgumentNullException(nameof(callback));
+            GogMainThreadDispatcher.Ensure();
+            Action<GogResult<Texture2D>> deliver = Once(callback);
+
+            UnityWebRequest req = UnityWebRequestTexture.GetTexture(url);
+            req.timeout = MediaTimeoutSeconds;
+            var op = req.SendWebRequest();
+            op.completed += _ =>
+            {
+                // Same structural guarantee as Send(): the ENTIRE completion path is wrapped, so a
+                // decode throw becomes a delivered failure rather than a dropped callback.
+                try
+                {
+                    GogResult<Texture2D> result;
+                    if (req.result != UnityWebRequest.Result.Success)
+                    {
+                        result = GogResult<Texture2D>.Fail(GogErrorCode.NetworkError,
+                            req.error ?? ("HTTP " + req.responseCode), retryable: false,
+                            rawReason: "media_" + req.result.ToString());
+                    }
+                    else
+                    {
+                        Texture2D tex = DownloadHandlerTexture.GetContent(req);
+                        result = tex != null
+                            ? GogResult<Texture2D>.Success(tex)
+                            : GogResult<Texture2D>.Fail(GogErrorCode.NetworkError,
+                                "Image could not be decoded.", retryable: false,
+                                rawReason: "media_decode_failed");
+                    }
+                    req.Dispose(); // frees the handler's buffer; the created Texture2D survives
+                    deliver(result);
+                }
+                catch (Exception e)
+                {
+                    try { req.Dispose(); } catch { /* already disposed */ }
+                    deliver(GogResult<Texture2D>.Fail(GogErrorCode.NetworkError,
+                        "Image could not be read: " + e.Message, retryable: false,
+                        rawReason: e.GetType().Name));
+                }
+            };
         }
 
         // Wrap the partner callback so it is delivered EXACTLY ONCE, on the main thread,

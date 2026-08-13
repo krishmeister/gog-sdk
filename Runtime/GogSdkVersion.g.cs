@@ -10,6 +10,6 @@ namespace Gog.Sdk
 {
     internal static class GogSdkVersion
     {
-        internal const string Value = "0.1.4";
+        internal const string Value = "0.2.0";
     }
 }

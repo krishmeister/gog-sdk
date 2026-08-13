@@ -332,13 +332,51 @@ persisted session survives and the next `Initialize()` restores it. You rarely n
 in a game; it exists for clean teardown and is also what keeps *Enter Play Mode without
 Domain Reload* leak-free in the Editor.
 
-## 10. AdMob (forward-looking — read before you wait on it)
+## 10. Interstitial ads
 
-**`GogAds` does not ship in 0.1.0.** Interstitials (`GogAds.ShowInterstitial`) arrive
-in a future version as an additive update — no rework on your side. What ships *now* is
-the build-time plumbing, and it ships now for one reason: the AdMob **app id** lives in
-your APK's manifest, so it must be in your build *before* release, or adding ads later
-would force a re-release.
+One call, one ad opportunity:
+
+```csharp
+GogAds.ShowInterstitial(result => {
+    // Continue the game. Always. Whatever `result` says.
+    LoadNextLevel();
+});
+```
+
+**Never make game flow depend on an ad rendering.** `GogAdOutcome.NoAd` is a *success*
+and it is common — the operator may have no ad scheduled for your game, the player's
+region may have none targeted, or a creative may simply have failed to load. The
+recommended pattern is to treat `!result.Ok` exactly like `NoAd` and carry on; there is
+no case where waiting on an ad is the right thing to do.
+
+```csharp
+GogAds.ShowInterstitial(result => {
+    bool shown = result.Ok && result.Value.Outcome == GogAdOutcome.Shown;
+    if (shown) Analytics.Track("interstitial_shown");   // fine to observe
+    LoadNextLevel();                                    // happens either way
+});
+```
+
+Everything about *which* ad appears — house creative or AdMob, rotation, frequency,
+which games an ad runs in, regional targeting — is decided server-side and controlled by
+GOG from the dashboard. There is nothing to configure in your build and nothing to
+schedule in code. Calling `ShowInterstitial` a second time while one is still in flight
+resolves immediately as `NoAd`.
+
+The player must view the ad briefly (a few seconds, shown as a draining indicator)
+before a close control appears. The ad is drawn on the SDK's own full-screen canvas over
+whatever your game is showing — you need no prefab, no scene object, and no UI of your
+own. If your scene has no `EventSystem`, the SDK creates one for the ad and destroys it
+afterwards.
+
+**This version serves house ads only.** If GOG has configured your game for AdMob, those
+directives resolve to `NoAd` with a warning in the log until the AdMob integration ships;
+your game is unaffected either way. Video creatives are not yet supported.
+
+### AdMob app id (set it now, even though AdMob is not live yet)
+
+The AdMob **app id** lives in your APK's manifest, so it must be in your build *before*
+release — adding ads later would otherwise force a re-release.
 
 If (and only if) GOG has set your game up for AdMob:
 
@@ -349,7 +387,5 @@ If (and only if) GOG has set your game up for AdMob:
   app that crashes on launch, which is what a malformed app id causes).
 - The id must belong to the **same AdMob account** as the ad units GOG configures for
   your game server-side. Mismatched accounts serve nothing.
-- Blank is always safe: no AdMob metadata enters your manifest at all.
-
-Nothing else to do until `GogAds` ships. Design rule to keep in mind now: game flow
-must never depend on an ad rendering — "no ad" will be a normal, frequent outcome.
+- Blank is always safe: no AdMob metadata enters your manifest at all, and house ads
+  keep working normally.

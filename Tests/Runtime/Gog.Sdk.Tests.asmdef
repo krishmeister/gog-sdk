@@ -3,6 +3,7 @@
     "rootNamespace": "Gog.Sdk.Tests",
     "references": [
         "Gog.Sdk",
+        "UnityEngine.UI",
         "UnityEngine.TestRunner",
         "UnityEditor.TestRunner"
     ],

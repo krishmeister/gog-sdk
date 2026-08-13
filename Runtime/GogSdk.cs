@@ -81,6 +81,7 @@ namespace Gog.Sdk
         {
             GogAuth.ResetEvents();
             GogDeepLink.ResetState();
+            GogAds.ResetState();          // drop any live ad surface; resolve it exactly once (I2)
             AndroidAuthBridge.Shutdown();
             GogMainThreadDispatcher.Shutdown();
             Settings = null;
@@ -98,6 +99,7 @@ namespace Gog.Sdk
             Settings = null;
             GogAuth.ResetEvents();
             GogDeepLink.ResetState();
+            GogAds.ResetState();
             AndroidAuthBridge.ResetStatics();
             GogMainThreadDispatcher.ResetStatics();
         }

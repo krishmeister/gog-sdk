@@ -1,5 +1,6 @@
 using System;
 using System.Collections;
+using System.Collections.Generic;
 using System.Net;
 using System.Net.Sockets;
 using System.Text;
@@ -224,21 +225,38 @@ namespace Gog.Sdk.Tests
             public readonly string ContentType;
             public readonly string Body;
 
+            /// <summary>Raw body, for non-text payloads (e.g. a PNG). Wins over
+            /// <see cref="Body"/> when non-null.</summary>
+            public readonly byte[] BodyBytes;
+
             public Response(int status, string contentType, string body)
             {
                 Status = status;
                 ContentType = contentType;
                 Body = body;
+                BodyBytes = null;
+            }
+
+            public Response(int status, string contentType, byte[] bodyBytes)
+            {
+                Status = status;
+                ContentType = contentType;
+                Body = null;
+                BodyBytes = bodyBytes;
             }
         }
 
         private readonly TcpListener _listener;
-        private readonly Func<Response> _responder;
+        private readonly Func<string, Response> _responder;
+        private readonly List<string> _requests = new List<string>();
+        private readonly object _requestsGate = new object();
         private volatile bool _running;
 
         public int Port { get; }
 
-        public LoopbackServer(Func<Response> responder)
+        /// <summary>Path-aware responder: receives the request target ("/ads/next?game_id=…"), so
+        /// one server can serve both a directive and the creative it points at.</summary>
+        public LoopbackServer(Func<string, Response> responder)
         {
             _responder = responder;
             _listener = new TcpListener(IPAddress.Loopback, 0);
@@ -248,8 +266,22 @@ namespace Gog.Sdk.Tests
             new Thread(Loop) { IsBackground = true, Name = "GogLoopbackServer" }.Start();
         }
 
+        public LoopbackServer(Func<Response> responder) : this(_ => responder()) { }
+
         public static LoopbackServer Constant(int status, string contentType, string body)
             => new LoopbackServer(() => new Response(status, contentType, body));
+
+        /// <summary>Every request target this server has been asked for, in order. Lets a test
+        /// assert what the SDK actually SENT — the impression index in particular.</summary>
+        public IReadOnlyList<string> Requests
+        {
+            get { lock (_requestsGate) { return _requests.ToArray(); } }
+        }
+
+        public int RequestCount
+        {
+            get { lock (_requestsGate) { return _requests.Count; } }
+        }
 
         public string Url(string path = "/") => $"http://127.0.0.1:{Port}{path}";
 
@@ -277,9 +309,10 @@ namespace Gog.Sdk.Tests
                     using (client)
                     using (var stream = client.GetStream())
                     {
-                        DrainRequest(stream);
-                        Response resp = _responder();
-                        byte[] bodyBytes = Encoding.UTF8.GetBytes(resp.Body ?? string.Empty);
+                        string target = DrainRequest(stream);
+                        lock (_requestsGate) { _requests.Add(target ?? string.Empty); }
+                        Response resp = _responder(target ?? string.Empty);
+                        byte[] bodyBytes = resp.BodyBytes ?? Encoding.UTF8.GetBytes(resp.Body ?? string.Empty);
                         string head =
                             $"HTTP/1.1 {resp.Status} {ReasonPhrase(resp.Status)}\r\n" +
                             $"Content-Type: {resp.ContentType}\r\n" +
@@ -295,7 +328,9 @@ namespace Gog.Sdk.Tests
             }
         }
 
-        private static void DrainRequest(NetworkStream stream)
+        /// <summary>Read the request headers and return the request target from the request line
+        /// ("GET /ads/next?index=3 HTTP/1.1" → "/ads/next?index=3"), or null.</summary>
+        private static string DrainRequest(NetworkStream stream)
         {
             try
             {
@@ -309,8 +344,14 @@ namespace Gog.Sdk.Tests
                     sb.Append(Encoding.ASCII.GetString(buf, 0, n));
                     if (sb.ToString().Contains("\r\n\r\n")) break; // end of request headers
                 }
+
+                string head = sb.ToString();
+                int eol = head.IndexOf("\r\n", StringComparison.Ordinal);
+                string requestLine = eol >= 0 ? head.Substring(0, eol) : head;
+                string[] parts = requestLine.Split(' ');
+                return parts.Length >= 2 ? parts[1] : null;
             }
-            catch { /* best-effort: the response does not depend on the request body */ }
+            catch { return null; } // best-effort: the response does not depend on the request body
         }
 
         private static string ReasonPhrase(int status)
@@ -319,7 +360,9 @@ namespace Gog.Sdk.Tests
             {
                 case 200: return "OK";
                 case 401: return "Unauthorized";
+                case 404: return "Not Found";
                 case 429: return "Too Many Requests";
+                case 500: return "Internal Server Error";
                 case 503: return "Service Unavailable";
                 default: return "Status";
             }

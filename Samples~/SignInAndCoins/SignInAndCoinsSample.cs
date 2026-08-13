@@ -164,7 +164,7 @@ namespace Gog.Sdk.Samples
             GUI.enabled = !_busy && GogSdk.IsInitialized;
             bool signedIn = GogSdk.IsInitialized && GogAuth.CurrentSession.IsSignedIn;
 
-            if (!signedIn && GUILayout.Button("Sign in with GOG", GUILayout.Height(72)))
+            if (!signedIn && GUILayout.Button("Sign in with Gully Games", GUILayout.Height(72)))
                 SignIn();
             if (signedIn && GUILayout.Button("Earn 10 coins", GUILayout.Height(72)))
                 EarnTen();
