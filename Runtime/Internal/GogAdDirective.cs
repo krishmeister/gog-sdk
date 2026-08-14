@@ -85,13 +85,17 @@ namespace Gog.Sdk.Internal
         /// <summary>
         /// Build the request URL. <paramref name="userId"/> is optional and additive per §6: when
         /// present the decision may also serve city-targeted creatives; when absent only
-        /// untargeted ones are eligible. A base URL with a trailing slash is tolerated.
+        /// untargeted ones are eligible. <paramref name="trigger"/> is optional and additive too:
+        /// "open" marks the SDK's automatic game-open opportunity, which the server gates on the
+        /// game's show_on_open policy. A base URL with a trailing slash is tolerated.
         /// </summary>
-        internal static string BuildUrl(string baseUrl, string gameId, string userId, int index)
+        internal static string BuildUrl(string baseUrl, string gameId, string userId, int index,
+            string trigger = null)
         {
             string root = (baseUrl ?? string.Empty).TrimEnd('/');
             string url = root + "/ads/next?game_id=" + Escape(gameId) + "&index=" + index.ToString();
             if (!string.IsNullOrEmpty(userId)) url += "&user_id=" + Escape(userId);
+            if (!string.IsNullOrEmpty(trigger)) url += "&trigger=" + Escape(trigger);
             return url;
         }
 

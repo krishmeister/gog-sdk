@@ -90,7 +90,7 @@ namespace Gog.Sdk
         /// house ads to signed-out players and contradict the server's design.</para>
         /// </summary>
         internal static void ShowInternal(string baseUrl, string gameId, string userId,
-            Action<GogResult<GogAdResult>> callback)
+            Action<GogResult<GogAdResult>> callback, string trigger = null)
         {
             // Concurrency guard, BEFORE the index increment: a rejected double-call must not
             // consume an impression opportunity. NoAd rather than an error keeps game flow
@@ -108,11 +108,32 @@ namespace Gog.Sdk
             _active = session;
 
             int index = GogAdImpressionIndex.Next();
-            string url = GogAdDirective.BuildUrl(baseUrl, gameId, userId, index);
+            string url = GogAdDirective.BuildUrl(baseUrl, gameId, userId, index, trigger);
 
             // No bearer: the route is public. Fetching a token would put a refresh round trip on
             // the ad path for nothing.
             GogHttp.Get<AdsNextDto>(url, null, r => OnDirective(session, r));
+        }
+
+        /// <summary>
+        /// The automatic game-open opportunity, fired by <c>GogSdk.Initialize()</c> — no game
+        /// code involved. Tagged <c>trigger=open</c> so the SERVER decides via the game's
+        /// show_on_open policy: games whose operator has not opted in get <c>none</c>, exactly
+        /// as if this call never happened. Fire-and-forget with a logging callback — there is
+        /// no partner callback to strand, and I7 (ads never block the game) holds throughout.
+        /// </summary>
+        internal static void AutoShowOnOpen()
+        {
+            if (!GogSdk.IsInitialized || Application.platform != RuntimePlatform.Android) return;
+
+            GogSettings settings = GogSdk.Settings;
+            ShowInternal(settings.ApiBaseUrl, settings.GameId, ResolveUserId(), result =>
+            {
+                if (!result.Ok)
+                {
+                    Debug.Log("[GOG SDK] Open interstitial not shown: " + result.Error.Message);
+                }
+            }, trigger: "open");
         }
 
         /// <summary>Drop any live ad surface and resolve anything in flight. Called from

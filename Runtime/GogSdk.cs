@@ -70,6 +70,12 @@ namespace Gog.Sdk
             AndroidAuthBridge.Initialize(settings.GameId, settings.ApiBaseUrl, GogAuth.RaiseSignedOut);
             Settings = settings;
             IsInitialized = true;
+
+            // One server-gated interstitial opportunity at game open (dashboard "show an ad
+            // when the game opens"). AFTER IsInitialized so the ad path sees a booted SDK;
+            // guarded because an ad must never be able to fail Initialize itself.
+            try { GogAds.AutoShowOnOpen(); }
+            catch (Exception e) { Debug.LogException(e); }
         }
 
         /// <summary>
