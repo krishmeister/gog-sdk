@@ -31,7 +31,7 @@ namespace Gog.Sdk.Internal
     /// <para>Wire shapes are frozen by docs/sdk-api-contract.md §6 and verified verbatim against
     /// services/api/src/index.ts (<c>GET /ads/next</c>, lines 560-713):</para>
     /// <code>
-    /// {"type":"house","impression_id":"…","creative":{"id":"…","image_url":"https…","click_url":"https…"|null},"expires_at":"&lt;ISO-8601&gt;","expires_in":300}
+    /// {"type":"house","impression_id":"…","creative":{"id":"…","image_url":"https…","click_url":"https…"|null,"media_type":"image"|"video","video_url":"https…"|null,"duration_seconds":15|null},"expires_at":"&lt;ISO-8601&gt;","expires_in":300}
     /// {"type":"admob","impression_id":"…","ad_unit_id":"ca-app-pub-…","expires_at":"&lt;ISO-8601&gt;","expires_in":300}
     /// {"type":"none"}   // HTTP 200 — normal outcome; carries NEITHER expires_at NOR expires_in
     /// </code>
@@ -62,6 +62,21 @@ namespace Gog.Sdk.Internal
 
         /// <summary>House only: the tap-through target, or null.</summary>
         internal string ClickUrl { get; private set; }
+
+        /// <summary>House only: the video to play, or null for a still-image creative.
+        ///
+        /// <para>When this is set, <see cref="ImageUrl"/> is the creative's POSTER frame rather
+        /// than the ad itself. The poster is still fetched and still rendered — it is what the
+        /// player sees while the video prepares, and what they keep seeing if the video cannot
+        /// be played at all. A video creative therefore degrades to a working image ad instead
+        /// of to nothing, which is the same reason the server sends both (I7).</para></summary>
+        internal string VideoUrl { get; private set; }
+
+        /// <summary>House only: the video's length in seconds as the operator recorded it, or 0
+        /// when unknown. Advisory — playback is driven by the file and the dismiss window is
+        /// still <see cref="ForcedViewSeconds"/>. Parsed so a later slice can use it without a
+        /// wire change.</summary>
+        internal int DurationSeconds { get; private set; }
 
         /// <summary>House only: the directive's freshness horizon in seconds, from
         /// <c>expires_in</c>. Enforced on a monotonic clock captured at receipt — never against
@@ -132,12 +147,22 @@ namespace Gog.Sdk.Internal
                         return Invalid("house directive missing required field 'creative'");
                     if (!dto.ExpiresIn.HasValue)
                         return Invalid("house directive missing required field 'expires_in'");
+                    // A creative counts as video only when it says so AND carries a source.
+                    // "video with no video_url" is treated as a plain image rather than as
+                    // Invalid: the poster is a perfectly serveable ad, and refusing to show it
+                    // would turn a server-side data problem into a blank screen (I7).
+                    bool isVideo =
+                        string.Equals(dto.Creative.MediaType, "video", StringComparison.Ordinal) &&
+                        !string.IsNullOrEmpty(dto.Creative.VideoUrl);
+
                     return new GogAdDirective
                     {
                         Kind = GogAdDirectiveKind.House,
                         CreativeId = dto.Creative.Id,
                         ImageUrl = dto.Creative.ImageUrl,
                         ClickUrl = dto.Creative.ClickUrl,
+                        VideoUrl = isVideo ? dto.Creative.VideoUrl : null,
+                        DurationSeconds = dto.Creative.DurationSeconds ?? 0,
                         ExpiresInSeconds = dto.ExpiresIn.Value,
                         ForcedViewSeconds = ResolveForcedView(dto.Creative.ForcedViewSeconds),
                     };
@@ -221,5 +246,16 @@ namespace Gog.Sdk.Internal
         /// <summary>Forward hook: no server sends this yet. Absent → the compiled default;
         /// present → the server wins, clamped to 1-30s.</summary>
         [JsonProperty("forced_view_seconds")] public int? ForcedViewSeconds { get; set; }
+
+        /// <summary>"image" or "video". ABSENT on servers that predate video, which is why it is
+        /// optional and why absent means image — the field was added additively and old builds
+        /// simply never saw it.</summary>
+        [JsonProperty("media_type")] public string MediaType { get; set; }
+
+        /// <summary>The video source. Present only alongside media_type "video".</summary>
+        [JsonProperty("video_url")] public string VideoUrl { get; set; }
+
+        /// <summary>Operator-recorded video length in seconds. Advisory.</summary>
+        [JsonProperty("duration_seconds")] public int? DurationSeconds { get; set; }
     }
 }

@@ -369,9 +369,16 @@ whatever your game is showing — you need no prefab, no scene object, and no UI
 own. If your scene has no `EventSystem`, the SDK creates one for the ad and destroys it
 afterwards.
 
-**This version serves house ads only.** If GOG has configured your game for AdMob, those
+House creatives can be **still images or video**, and both need exactly nothing from you.
+Video plays through Unity's built-in `UnityEngine.Video` module — no package to import,
+no dependency to resolve, no setting to fill in. Every video creative also carries a
+poster frame: the poster appears first, the video swaps in once it is ready, and if the
+video cannot be played on a given device the poster simply stays. Either way your
+callback gets `Shown`, so there is no new outcome to handle.
+
+**AdMob is still not served.** If GOG has configured your game for AdMob, those
 directives resolve to `NoAd` with a warning in the log until the AdMob integration ships;
-your game is unaffected either way. Video creatives are not yet supported.
+your game is unaffected either way.
 
 ### AdMob app id (set it now, even though AdMob is not live yet)
 

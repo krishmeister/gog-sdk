@@ -413,6 +413,62 @@ namespace Gog.Sdk.Tests
             Assert.AreEqual(GogAdDirective.MinForcedViewSeconds, Interpret(0).ForcedViewSeconds);
         }
 
+        [Test]
+        public void VideoCreative_CarriesItsSourceAndKeepsThePosterAsImageUrl()
+        {
+            GogAdDirective d = InterpretMedia("video", "https://example.com/a.mp4", 15);
+
+            Assert.AreEqual(GogAdDirectiveKind.House, d.Kind, "video is a house directive");
+            Assert.AreEqual("https://example.com/a.mp4", d.VideoUrl);
+            Assert.AreEqual(15, d.DurationSeconds);
+            Assert.AreEqual("https://example.com/a.png", d.ImageUrl,
+                "image_url stays the POSTER — it is what renders while the video prepares and " +
+                "what remains if playback fails");
+        }
+
+        [Test]
+        public void CreativeWithoutMediaType_IsAnImage()
+        {
+            // The field is additive: a server that predates video never sends it, and those
+            // responses must keep behaving exactly as they did.
+            GogAdDirective d = InterpretMedia(null, null, null);
+
+            Assert.AreEqual(GogAdDirectiveKind.House, d.Kind);
+            Assert.IsNull(d.VideoUrl, "no media_type means a plain image creative");
+            Assert.AreEqual(0, d.DurationSeconds);
+        }
+
+        [Test]
+        public void VideoCreativeMissingItsSource_DegradesToTheImage_NotToAFailure()
+        {
+            // A data fault on the server must not cost the player the ad: the poster is a
+            // complete, serveable creative on its own (I7).
+            GogAdDirective d = InterpretMedia("video", null, null);
+
+            Assert.AreEqual(GogAdDirectiveKind.House, d.Kind,
+                "a missing video source is NOT an Invalid directive");
+            Assert.IsNull(d.VideoUrl);
+            Assert.AreEqual("https://example.com/a.png", d.ImageUrl);
+        }
+
+        private static GogAdDirective InterpretMedia(string mediaType, string videoUrl, int? duration)
+        {
+            var dto = new AdsNextDto
+            {
+                Type = "house",
+                ExpiresIn = 300,
+                Creative = new AdsNextCreativeDto
+                {
+                    Id = "c1",
+                    ImageUrl = "https://example.com/a.png",
+                    MediaType = mediaType,
+                    VideoUrl = videoUrl,
+                    DurationSeconds = duration,
+                },
+            };
+            return GogAdDirective.Interpret(dto);
+        }
+
         private static GogAdDirective Interpret(int? forcedView)
         {
             var dto = new AdsNextDto

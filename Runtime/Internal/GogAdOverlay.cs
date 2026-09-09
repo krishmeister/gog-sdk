@@ -2,6 +2,7 @@ using System;
 using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.UI;
+using UnityEngine.Video;
 
 namespace Gog.Sdk.Internal
 {
@@ -20,6 +21,18 @@ namespace Gog.Sdk.Internal
     /// SDK shutdown — funnels through <see cref="Finish"/>, guarded by <c>_torn</c>. The target
     /// hardware OOM-kills on routine operations, so a leaked decoded texture across a few
     /// show/dismiss cycles is a crash, not a slow leak.</para>
+    ///
+    /// <para><b>Video renders through the SAME surface as an image.</b> A video creative decodes
+    /// into a RenderTexture which is swapped onto the one RawImage the image path already uses,
+    /// so the backdrop, letterboxing, click handling, forced-view countdown, close control and
+    /// failsafe are all literally the same code. Playback uses UnityEngine.Video.VideoPlayer — a
+    /// BUILT-IN Unity module, no package, no EDM4U dependency, nothing for a partner to import
+    /// (the contrast with AdMob, which needs an external plugin, is deliberate).</para>
+    ///
+    /// <para><b>The poster always wins ties.</b> The still frame is fetched and shown FIRST, and
+    /// the video is swapped in only once it has actually prepared. Every video failure — codec
+    /// refused, network stalled, prepare timed out — simply leaves the poster on screen. A video
+    /// creative can therefore never render worse than the image ad it falls back to (I7).</para>
     /// </summary>
     internal sealed class GogAdOverlay : MonoBehaviour
     {
@@ -46,8 +59,34 @@ namespace Gog.Sdk.Internal
 
         private static GogAdOverlay _instance;
 
+        /// <summary>
+        /// How long to wait for a video to become playable before giving up and staying on the
+        /// poster, in unscaled FOREGROUND seconds.
+        ///
+        /// <para><b>Why 6 seconds.</b> The forced-view window is 1-30s with a 4s default, so a
+        /// video that has not started by 6s would spend most of a typical ad as a still frame
+        /// anyway — at which point the honest outcome is "this is an image ad", not a longer
+        /// stall. It also has to stay well under the 90s failsafe so a wedged prepare surfaces as
+        /// a poster the player can dismiss, never as a frozen overlay.</para>
+        /// </summary>
+        internal const float VideoPrepareTimeoutSeconds = 6f;
+
+        /// <summary>Upper bound on the RenderTexture we allocate for playback. A 4K ad on a
+        /// budget phone is an OOM; 1920 on the long edge is beyond any interstitial's needs and
+        /// keeps the allocation near the ~8 MB the image path already peaks at.</summary>
+        private const int VideoMaxDimension = 1920;
+
         private Action<GogAdOutcome> _resolve;
         private Texture2D _texture;
+        private RawImage _creative;
+        private AspectRatioFitter _fitter;
+        private string _videoUrl;
+        private VideoPlayer _video;
+        private RenderTexture _videoTarget;
+        private bool _videoPlaying;
+        private bool _videoSettled;
+        private bool _videoReleasePending;
+        private float _videoWait;
         private Image _ring;
         private GameObject _closeGlyph;
         private Button _closeButton;
@@ -65,8 +104,12 @@ namespace Gog.Sdk.Internal
         /// Build and present the overlay. <paramref name="resolve"/> is invoked exactly once, on
         /// the main thread, when the ad finishes for any reason.
         /// </summary>
+        /// <param name="texture">The decoded still. For a video creative this is its POSTER —
+        /// shown immediately and kept if playback never starts.</param>
+        /// <param name="videoUrl">Optional. When set, playback is attempted and swapped in over
+        /// the poster once prepared.</param>
         internal static GogAdOverlay Show(Texture2D texture, string clickUrl, float forcedViewSeconds,
-            Action<GogAdOutcome> resolve)
+            Action<GogAdOutcome> resolve, string videoUrl = null)
         {
             var go = new GameObject("GogAdOverlay") { hideFlags = HideFlags.HideAndDontSave };
             DontDestroyOnLoad(go);
@@ -77,7 +120,11 @@ namespace Gog.Sdk.Internal
             overlay._clickUrl = clickUrl;
             overlay._forcedViewSeconds = forcedViewSeconds;
             overlay._resolve = resolve;
+            overlay._videoUrl = videoUrl;
             overlay.Build();
+            // AFTER Build: the poster is already on screen, so a prepare that fails or hangs
+            // costs the player nothing.
+            if (!string.IsNullOrEmpty(videoUrl)) overlay.BeginVideo();
             return overlay;
         }
 
@@ -136,15 +183,17 @@ namespace Gog.Sdk.Internal
             var rt = go.GetComponent<RectTransform>();
             Stretch(rt);
 
-            var raw = go.AddComponent<RawImage>();
-            raw.texture = _texture;
-            raw.raycastTarget = true;
+            // Held: the video path swaps this same RawImage's texture and re-fits it once the
+            // real frame size is known, so both media kinds share one surface.
+            _creative = go.AddComponent<RawImage>();
+            _creative.texture = _texture;
+            _creative.raycastTarget = true;
 
             // Letterbox inside the screen rather than stretching. The aspect comes from the
             // decoded texture, so no server-side width/height is needed.
-            var fitter = go.AddComponent<AspectRatioFitter>();
-            fitter.aspectMode = AspectRatioFitter.AspectMode.FitInParent;
-            fitter.aspectRatio = _texture != null && _texture.height > 0
+            _fitter = go.AddComponent<AspectRatioFitter>();
+            _fitter.aspectMode = AspectRatioFitter.AspectMode.FitInParent;
+            _fitter.aspectRatio = _texture != null && _texture.height > 0
                 ? _texture.width / (float)_texture.height
                 : 1f;
 
@@ -258,6 +307,147 @@ namespace Gog.Sdk.Internal
                       "It is destroyed with the ad.");
         }
 
+        // ── video ─────────────────────────────────────────────────────────────────
+
+        /// <summary>
+        /// Start preparing the video. Called AFTER the poster is on screen, so everything here is
+        /// an upgrade to an ad that is already running — which is why every failure path below
+        /// simply stops trying rather than resolving the ad.
+        /// </summary>
+        private void BeginVideo()
+        {
+            try
+            {
+                _video = gameObject.AddComponent<VideoPlayer>();
+                _video.source = VideoSource.Url;
+                _video.url = _videoUrl;
+                _video.playOnAwake = false;
+                _video.waitForFirstFrame = true;
+                _video.skipOnDrop = true;
+                // Loop: the forced-view window is operator-set and independent of the file, so a
+                // 5s cut under a 15s window would otherwise freeze on its last frame for ten
+                // seconds and read as a hang.
+                _video.isLooping = true;
+                // Direct output needs no AudioSource and no mixer wiring in the partner's scene.
+                // Ads carry sound; a game that has muted itself is unaffected because this does
+                // not route through the game's AudioListener volume.
+                _video.audioOutputMode = VideoAudioOutputMode.Direct;
+                // Render into our own texture rather than a camera target — the overlay is a
+                // ScreenSpaceOverlay canvas and may have no camera of its own at all.
+                _video.renderMode = VideoRenderMode.RenderTexture;
+
+                _video.errorReceived += OnVideoError;
+                _video.prepareCompleted += OnVideoPrepared;
+                _video.Prepare();
+            }
+            catch (Exception e)
+            {
+                // A missing Video module or a platform that refuses the component must not take
+                // the ad down with it — the poster is still a valid impression.
+                Debug.LogWarning("[GOG SDK] Video playback could not start (" + e.Message +
+                                 ") — showing the creative's poster image instead.");
+                Debug.LogException(e);
+                AbandonVideo();
+            }
+        }
+
+        private void OnVideoError(VideoPlayer source, string message)
+        {
+            Debug.LogWarning("[GOG SDK] Ad video failed to play (" + message +
+                             ") — showing the creative's poster image instead.");
+            AbandonVideo();
+        }
+
+        private void OnVideoPrepared(VideoPlayer source)
+        {
+            if (_torn || _videoSettled) return;
+
+            try
+            {
+                int w = (int)source.width;
+                int h = (int)source.height;
+                if (w <= 0 || h <= 0)
+                {
+                    AbandonVideo();
+                    return;
+                }
+
+                // Scale the long edge down to the cap, preserving aspect. A 4K creative on a
+                // 512 MB device is an OOM, and nothing above 1080p is visible on an interstitial.
+                int longEdge = Mathf.Max(w, h);
+                if (longEdge > VideoMaxDimension)
+                {
+                    float k = VideoMaxDimension / (float)longEdge;
+                    w = Mathf.Max(2, Mathf.RoundToInt(w * k));
+                    h = Mathf.Max(2, Mathf.RoundToInt(h * k));
+                }
+
+                _videoTarget = new RenderTexture(w, h, 0) { name = "GogAdVideoTarget" };
+                _videoTarget.Create();
+                source.targetTexture = _videoTarget;
+
+                if (_creative != null) _creative.texture = _videoTarget;
+                if (_fitter != null) _fitter.aspectRatio = w / (float)h;
+
+                source.Play();
+                _videoPlaying = true;
+                _videoSettled = true;
+            }
+            catch (Exception e)
+            {
+                Debug.LogWarning("[GOG SDK] Ad video could not be presented (" + e.Message +
+                                 ") — showing the creative's poster image instead.");
+                Debug.LogException(e);
+                AbandonVideo();
+            }
+        }
+
+        /// <summary>
+        /// Give up on video and leave the poster showing. Idempotent, and deliberately NOT an ad
+        /// failure: the still frame is the creative's own fallback asset, so the impression is
+        /// real and the outcome is still Shown.
+        ///
+        /// <para><b>The teardown is DEFERRED to the next Update.</b> The commonest caller is
+        /// <see cref="OnVideoError"/>, which runs inside VideoPlayer's own native callback —
+        /// calling Stop() and destroying the component from in there is a native-side crash on
+        /// some Android drivers. Swapping the texture back is immediate (that is what the player
+        /// sees); only the destruction waits a frame.</para>
+        /// </summary>
+        private void AbandonVideo()
+        {
+            _videoSettled = true;
+            _videoPlaying = false;
+            if (_creative != null && _texture != null) _creative.texture = _texture;
+            _videoReleasePending = true;
+        }
+
+        /// <summary>Tear down the player and its target texture. Safe to call twice and safe
+        /// before <see cref="BeginVideo"/> ever ran.</summary>
+        private void ReleaseVideo()
+        {
+            if (_video != null)
+            {
+                _video.errorReceived -= OnVideoError;
+                _video.prepareCompleted -= OnVideoPrepared;
+                // Stop before dropping the target: releasing a RenderTexture still bound to a
+                // playing VideoPlayer is a native-side crash on some Android drivers.
+                try { _video.Stop(); }
+                catch (Exception e) { Debug.LogException(e); }
+                _video.targetTexture = null;
+                DestroyObject(_video);
+                _video = null;
+            }
+
+            if (_videoTarget != null)
+            {
+                // A RenderTexture is native memory Unity will not reclaim promptly — the same
+                // reason the decoded poster is destroyed explicitly.
+                _videoTarget.Release();
+                DestroyObject(_videoTarget);
+                _videoTarget = null;
+            }
+        }
+
         // ── lifetime ──────────────────────────────────────────────────────────────
 
         private void Update()
@@ -265,6 +455,28 @@ namespace Gog.Sdk.Internal
             if (_torn || _paused) return;
 
             _elapsed += Time.unscaledDeltaTime;
+
+            // The deferred teardown from AbandonVideo — one frame after the callback that asked
+            // for it, so we are never inside VideoPlayer's native stack when it happens.
+            if (_videoReleasePending)
+            {
+                _videoReleasePending = false;
+                ReleaseVideo();
+            }
+
+            // Prepare watchdog. Counted on the same unscaled foreground clock as the forced-view
+            // window, so a player who backgrounds the app mid-prepare is not charged the wait.
+            if (!_videoSettled && _video != null)
+            {
+                _videoWait += Time.unscaledDeltaTime;
+                if (_videoWait >= VideoPrepareTimeoutSeconds)
+                {
+                    Debug.Log("[GOG SDK] Ad video was still preparing after " +
+                              VideoPrepareTimeoutSeconds + "s — showing the creative's poster " +
+                              "image instead.");
+                    AbandonVideo();
+                }
+            }
 
             if (!_closeReady)
             {
@@ -297,7 +509,19 @@ namespace Gog.Sdk.Internal
         // Backgrounding stops the forced-view and failsafe clocks explicitly, rather than relying
         // on Update() not running — a game that sets Application.runInBackground = true would
         // otherwise keep both advancing while the player is in a browser or another app.
-        private void OnApplicationPause(bool paused) => _paused = paused;
+        private void OnApplicationPause(bool paused)
+        {
+            _paused = paused;
+            // Keep playback in step with the clocks above: a video that ran on in the background
+            // would come back mid-way through a cut the player never saw the start of.
+            if (_video == null || !_videoPlaying) return;
+            try
+            {
+                if (paused) _video.Pause();
+                else _video.Play();
+            }
+            catch (Exception e) { Debug.LogException(e); }
+        }
 
         private void OnCreativeTapped()
         {
@@ -352,6 +576,13 @@ namespace Gog.Sdk.Internal
         {
             if (_instance == this) _instance = null;
 
+            // Before the poster: ReleaseVideo unbinds the RenderTexture the RawImage may still
+            // be pointing at, so neither destroy races the other. Runs unconditionally — a
+            // teardown deferred by AbandonVideo may still be outstanding, and Cleanup is the
+            // last chance to honour it.
+            _videoReleasePending = false;
+            ReleaseVideo();
+
             // The decoded texture is ours: DownloadHandlerTexture created it and nothing else
             // references it. Unity does not collect textures promptly, and a 1080x1920 RGBA32
             // decode is ~8 MB — a handful of leaked cycles is an OOM on the target hardware.
@@ -378,6 +609,10 @@ namespace Gog.Sdk.Internal
         // ── test seams (internal; see GogAdImpressionIndex for the rationale) ──────
 
         internal static GogAdOverlay ActiveForTests => _instance;
+
+        /// <summary>True once a video creative is actually playing (as opposed to still
+        /// preparing, or fallen back to its poster).</summary>
+        internal bool VideoPlayingForTests => _videoPlaying;
 
         internal bool CloseControlReadyForTests => _closeReady;
 

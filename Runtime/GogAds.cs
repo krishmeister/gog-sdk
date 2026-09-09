@@ -42,9 +42,15 @@ namespace Gog.Sdk
     /// GogAds.ShowInterstitial(result => ContinueToNextLevel());
     /// </code>
     ///
-    /// <para><b>This build serves house ads only.</b> An AdMob directive resolves to
-    /// <see cref="GogAdOutcome.NoAd"/> with a loud warning until the Google Mobile Ads
-    /// integration lands; video creatives are not yet supported by the server.</para>
+    /// <para><b>This build serves house ads only</b> — images and video. An AdMob directive
+    /// still resolves to <see cref="GogAdOutcome.NoAd"/> with a loud warning until the Google
+    /// Mobile Ads integration lands.</para>
+    ///
+    /// <para><b>Video needs nothing from you.</b> Playback uses Unity's built-in
+    /// UnityEngine.Video module — no package to import, no dependency to resolve, no settings to
+    /// fill in. A video creative also carries a poster frame, and the poster is what renders if
+    /// the video cannot be played on a given device, so <see cref="GogAdOutcome.Shown"/> means
+    /// the same thing it always did.</para>
     /// </summary>
     public static class GogAds
     {
@@ -193,6 +199,15 @@ namespace Gog.Sdk
             }
         }
 
+        /// <summary>
+        /// Fetch the still frame and present it. For a VIDEO creative this same still is the
+        /// poster, and the video URL is handed to the overlay to swap in once it prepares.
+        ///
+        /// <para>The poster is deliberately the gate for BOTH kinds: it is small, it is the
+        /// fallback, and gating on it means a video creative can never be worse than the image
+        /// ad it degrades to. Nothing here waits on the video — the ad is already on screen
+        /// before playback is attempted.</para>
+        /// </summary>
         private static void FetchCreative(AdSession session, GogAdDirective directive)
         {
             // Captured at RECEIPT and measured on the monotonic clock, never against expires_at
@@ -226,7 +241,7 @@ namespace Gog.Sdk
                 try
                 {
                     GogAdOverlay.Show(r.Value, directive.ClickUrl, directive.ForcedViewSeconds,
-                        outcome => session.Resolve(outcome));
+                        outcome => session.Resolve(outcome), directive.VideoUrl);
                 }
                 catch (Exception e)
                 {
