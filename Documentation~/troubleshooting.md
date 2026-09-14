@@ -22,6 +22,33 @@ app at launch on a malformed app id, so the SDK fails your build instead.
 **Fix:** paste the app id from the AdMob console (Apps → App settings), or clear the
 field entirely — blank is always safe and simply injects no AdMob metadata.
 
+## AdMob ads never appear: "AdMob interstitial not shown (gma_missing)"
+
+**Symptom:** GOG has set your game up for AdMob, `ShowInterstitial` always resolves `NoAd`,
+and the log (tag `Unity`) shows this warning.
+**Cause:** Google's `play-services-ads` library is not in your APK. The SDK asks for it
+through `GogSdkDependencies.xml`, but only the External Dependency Manager for Unity
+(EDM4U) reads that file.
+**Fix:** install EDM4U, run *Assets → External Dependency Manager → Android Resolver →
+Resolve*, set the AdMob app id (next entry), and rebuild.
+
+## AdMob ads never appear: "AdMob interstitial not shown (app_id_missing)"
+
+**Symptom:** as above, but the warning names `app_id_missing`.
+**Cause:** *Project Settings → GOG SDK → AdMob app id* is blank, so no app id is in your
+manifest.
+**Fix:** paste the `ca-app-pub-…~…` app id from the same AdMob account as your game's ad
+units, and rebuild.
+
+## AdMob ads rarely appear: "AdMob interstitial not shown (load_failed:3 …)"
+
+**Symptom:** a plain log line (not a warning) with `load_failed:3` or `load_timeout`.
+**Cause:** not an SDK fault — Google had no ad for this request (code 3 is "no fill"), or
+the fill took too long. New AdMob apps, apps not yet linked to a Play Store listing, and
+apps without an `app-ads.txt` on the developer website get little or no fill.
+**Fix:** nothing in your build. Link the app to its store listing in the AdMob console and
+check it for "limited ad serving" notices.
+
 ## Exception at startup: "com.gog.sdk C# binding is vX but the bundled native core reports vY"
 
 **Symptom:** `GogSdk.Initialize()` throws with this message; the SDK refuses to start.

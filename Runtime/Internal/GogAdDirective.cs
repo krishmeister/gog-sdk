@@ -13,7 +13,7 @@ namespace Gog.Sdk.Internal
         /// (I9: unknown discriminators map to the module-safe default).</summary>
         NoAd,
 
-        /// <summary>An AdMob directive. Not rendered in this slice — see <c>GogAds</c>.</summary>
+        /// <summary>An AdMob interstitial, shown by the native core — see <c>GogAds</c>.</summary>
         Admob,
 
         /// <summary>A 200 whose shape does not satisfy the contract. Becomes a NetworkError
@@ -78,7 +78,10 @@ namespace Gog.Sdk.Internal
         /// wire change.</summary>
         internal int DurationSeconds { get; private set; }
 
-        /// <summary>House only: the directive's freshness horizon in seconds, from
+        /// <summary>Admob only: the ad unit id the server chose for this game.</summary>
+        internal string AdUnitId { get; private set; }
+
+        /// <summary>House and admob: the directive's freshness horizon in seconds, from
         /// <c>expires_in</c>. Enforced on a monotonic clock captured at receipt — never against
         /// <c>expires_at</c>, which is a device-wall-clock value and informational only (§6).</summary>
         internal int ExpiresInSeconds { get; private set; }
@@ -137,10 +140,18 @@ namespace Gog.Sdk.Internal
                     return new GogAdDirective { Kind = GogAdDirectiveKind.NoAd };
 
                 case "admob":
-                    // Deliberately unvalidated: this slice resolves every admob directive to NoAd
-                    // (I7), so validating fields on a directive we are about to discard would
-                    // manufacture spurious NetworkErrors for a working server.
-                    return new GogAdDirective { Kind = GogAdDirectiveKind.Admob };
+                    // Same §1.4.5 rule as house: the server always sends both fields on an admob
+                    // directive, so a missing one is a wrong-shape 200, not a default-filled ad.
+                    if (string.IsNullOrEmpty(dto.AdUnitId))
+                        return Invalid("admob directive missing required field 'ad_unit_id'");
+                    if (!dto.ExpiresIn.HasValue)
+                        return Invalid("admob directive missing required field 'expires_in'");
+                    return new GogAdDirective
+                    {
+                        Kind = GogAdDirectiveKind.Admob,
+                        AdUnitId = dto.AdUnitId,
+                        ExpiresInSeconds = dto.ExpiresIn.Value,
+                    };
 
                 case "house":
                     if (dto.Creative == null)
@@ -219,7 +230,7 @@ namespace Gog.Sdk.Internal
 
         [JsonProperty("creative")] public AdsNextCreativeDto Creative { get; set; }
 
-        /// <summary>Admob only. Unused this slice — the render lands in S8b-2.</summary>
+        /// <summary>Admob only: the AdMob ad unit to load (<c>ca-app-pub-…/…</c>).</summary>
         [JsonProperty("ad_unit_id")] public string AdUnitId { get; set; }
 
         /// <summary>Seconds. Absent on <c>{"type":"none"}</c> by server design, hence nullable.</summary>

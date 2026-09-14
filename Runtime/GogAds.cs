@@ -42,9 +42,11 @@ namespace Gog.Sdk
     /// GogAds.ShowInterstitial(result => ContinueToNextLevel());
     /// </code>
     ///
-    /// <para><b>This build serves house ads only</b> — images and video. An AdMob directive
-    /// still resolves to <see cref="GogAdOutcome.NoAd"/> with a loud warning until the Google
-    /// Mobile Ads integration lands.</para>
+    /// <para><b>AdMob</b> interstitials are shown by the bundled native core with the Google
+    /// Mobile Ads Android SDK — no Unity plugin. The game needs two things: the External
+    /// Dependency Manager for Unity (so <c>GogSdkDependencies.xml</c> pulls in
+    /// play-services-ads) and <c>GogSettings.AdmobAppId</c>. Without them an AdMob directive
+    /// resolves to <see cref="GogAdOutcome.NoAd"/> with a warning naming the fix.</para>
     ///
     /// <para><b>Video needs nothing from you.</b> Playback uses Unity's built-in
     /// UnityEngine.Video module — no package to import, no dependency to resolve, no settings to
@@ -184,18 +186,62 @@ namespace Gog.Sdk
                     return;
 
                 case GogAdDirectiveKind.Admob:
-                    Debug.LogWarning(
-                        "[GOG SDK] The server served an AdMob interstitial for this game, but Google " +
-                        "Mobile Ads is not integrated in this build — resolving to NoAd. House " +
-                        "creatives are unaffected. To serve AdMob: integrate the Google Mobile Ads " +
-                        "Unity plugin and set GogSettings.AdmobAppId. To serve house ads only: " +
-                        "change this game's delivery mode in the GOG dashboard.");
-                    session.Resolve(GogAdOutcome.NoAd);
+                    ShowAdmob(session, directive);
                     return;
 
                 default:
                     FetchCreative(session, directive);
                     return;
+            }
+        }
+
+        /// <summary>
+        /// Hand an AdMob directive to the native core, which loads and shows the interstitial
+        /// with the Google Mobile Ads Android SDK. The load is capped (never past the directive's
+        /// TTL) so a slow fill is a NoAd, not a wait.
+        ///
+        /// <para>A no-fill is routine and logs quietly. A build that cannot serve AdMob at all —
+        /// GMA not resolved, no app id — warns loudly and names the fix, because it will miss
+        /// every AdMob opportunity until rebuilt.</para>
+        /// </summary>
+        private static void ShowAdmob(AdSession session, GogAdDirective directive)
+        {
+            AndroidAdmobBridge.ShowInterstitial(directive.AdUnitId, directive.ExpiresInSeconds,
+                (shown, reason) =>
+                {
+                    if (!shown)
+                    {
+                        string hint = AdmobFixHint(reason);
+                        string message = "[GOG SDK] AdMob interstitial not shown (" + reason + ")" +
+                                         (hint != null ? " — " + hint : string.Empty) +
+                                         " — resolving as NoAd.";
+                        if (hint != null) Debug.LogWarning(message);
+                        else Debug.Log(message);
+                    }
+                    session.Resolve(shown ? GogAdOutcome.Shown : GogAdOutcome.NoAd);
+                });
+        }
+
+        /// <summary>The fix for a build that can never show AdMob, or null for per-request
+        /// outcomes (no fill, timeout, off-Android) that need no action.</summary>
+        private static string AdmobFixHint(string reason)
+        {
+            switch (reason)
+            {
+                case "gma_missing":
+                    return "Google Mobile Ads (play-services-ads) is not in this build. Install the " +
+                           "External Dependency Manager for Unity so the SDK's GogSdkDependencies.xml " +
+                           "resolves, then rebuild. To serve house ads only, change this game's " +
+                           "delivery mode in the GOG dashboard.";
+                case "app_id_missing":
+                    return "GogSettings.AdmobAppId is empty. Set it in Project Settings → GOG SDK " +
+                           "(the ca-app-pub-…~… app id from the same AdMob account as the ad unit) " +
+                           "and rebuild.";
+                case "bridge_exception":
+                    return "the bundled native core has no AdMob support. Reinstall the com.gog.sdk " +
+                           "package cleanly.";
+                default:
+                    return null;
             }
         }
 

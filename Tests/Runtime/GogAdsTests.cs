@@ -83,11 +83,13 @@ namespace Gog.Sdk.Tests
             Assert.AreEqual(1, run.Calls);
         }
 
-        // ── 3. admob → NoAd + the loud warning (I7; NOT AdNotConfigured) ──────────
+        // ── 3. admob off-Android → NoAd, a success (I7; NOT AdNotConfigured) ──────
+        // The render itself is native (GogAdmob) and cannot run in the Editor; this proves the
+        // directive reaches the bridge and an unshowable AdMob ad still resolves exactly once.
         [UnityTest]
-        public IEnumerator Admob_ResolvesNoAd_WithLoudWarning()
+        public IEnumerator Admob_OffAndroid_ResolvesNoAd()
         {
-            LogAssert.Expect(LogType.Warning, new Regex("Google Mobile Ads is not integrated"));
+            LogAssert.Expect(LogType.Log, new Regex(@"AdMob interstitial not shown \(unsupported_platform\)"));
             _server = LoopbackServer.Constant(200, "application/json",
                 "{\"type\":\"admob\",\"impression_id\":\"i1\",\"ad_unit_id\":\"ca-app-pub-1/2\"," +
                 "\"expires_at\":\"2026-01-01T00:00:00.000Z\",\"expires_in\":300}");
@@ -95,8 +97,24 @@ namespace Gog.Sdk.Tests
             var run = Show();
             yield return run.Wait();
 
-            Assert.IsTrue(run.Result.Ok, "an unexecutable directive is NoAd, never an error (I7)");
+            Assert.IsTrue(run.Result.Ok, "an unshowable AdMob directive is NoAd, never an error (I7)");
             Assert.AreEqual(GogAdOutcome.NoAd, run.Result.Value.Outcome);
+            Assert.AreEqual(1, run.Calls, "callback must fire exactly once");
+        }
+
+        // ── 3b. admob without ad_unit_id → a wrong-shape 200 is a failure (§1.4.5) ─
+        [UnityTest]
+        public IEnumerator Admob_MissingAdUnitId_IsNetworkError()
+        {
+            _server = LoopbackServer.Constant(200, "application/json",
+                "{\"type\":\"admob\",\"impression_id\":\"i1\",\"expires_in\":300}");
+
+            var run = Show();
+            yield return run.Wait();
+
+            Assert.IsFalse(run.Result.Ok, "a malformed admob directive must not be a default-filled success");
+            Assert.AreEqual(GogErrorCode.NetworkError, run.Result.Error.Code);
+            StringAssert.Contains("ad_unit_id", run.Result.Error.Message);
         }
 
         // ── 4. An unknown discriminator → NoAd, the module-safe default (I9) ──────

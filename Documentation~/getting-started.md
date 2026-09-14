@@ -376,16 +376,27 @@ poster frame: the poster appears first, the video swaps in once it is ready, and
 video cannot be played on a given device the poster simply stays. Either way your
 callback gets `Shown`, so there is no new outcome to handle.
 
-**AdMob is still not served.** If GOG has configured your game for AdMob, those
-directives resolve to `NoAd` with a warning in the log until the AdMob integration ships;
-your game is unaffected either way.
+**AdMob interstitials** are shown by the SDK itself, using Google's full-screen ad — you
+do not import the Google Mobile Ads Unity plugin and write no ad code. Your callback gets
+`Shown` once the player closes the ad, or `NoAd` when Google has no ad to fill (common,
+especially for new apps) or it does not load within a few seconds.
 
-### AdMob app id (set it now, even though AdMob is not live yet)
+### AdMob setup (only if GOG has set your game up for AdMob)
+
+Two things must be in your build, because both end up in your APK:
+
+1. **The External Dependency Manager for Unity (EDM4U).** The SDK ships
+   `GogSdkDependencies.xml`, which asks EDM4U to add Google's
+   `play-services-ads` library to your Android build. Install EDM4U (from
+   [OpenUPM](https://openupm.com/packages/com.google.external-dependency-manager/)),
+   then run *Assets → External Dependency Manager → Android Resolver → Resolve*.
+   Without it, AdMob ads resolve to `NoAd` with a warning naming this step.
+2. **The AdMob app id**, described below. Without it, AdMob ads resolve to `NoAd` with a
+   warning naming the setting. Do **not** add `play-services-ads` without an app id:
+   Google's library stops the app at launch when the app id is missing.
 
 The AdMob **app id** lives in your APK's manifest, so it must be in your build *before*
 release — adding ads later would otherwise force a re-release.
-
-If (and only if) GOG has set your game up for AdMob:
 
 - Enter the **AdMob app id** in *Project Settings → GOG SDK*. App ids look like
   `ca-app-pub-1234567890123456~1234567890` — note the **`~`**. An ad **unit** id

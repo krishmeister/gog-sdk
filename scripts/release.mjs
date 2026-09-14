@@ -43,7 +43,8 @@
 // leaves every file untouched and the working tree releasable.
 
 import { execFileSync } from 'node:child_process'
-import { copyFileSync, existsSync, readFileSync, writeFileSync } from 'node:fs'
+import { copyFileSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -149,20 +150,25 @@ if (!dryRun) {
 
 // ── 2. Verify the built .aar really carries this version ────────────────────
 // BuildConfig.SDK_VERSION is a compiled string constant, so it appears verbatim
-// in the bytes of classes.jar inside the .aar. Scanning for it is crude and
-// completely reliable: it fails when Gradle handed back a cached artefact built
-// under a different -PgogSdkVersion, which no other check here would catch and
-// which would ship as a boot-time crash in every game.
+// in the bytes of BuildConfig.class. Scanning for it is crude and completely
+// reliable: it fails when Gradle handed back a cached artefact built under a
+// different -PgogSdkVersion, which no other check here would catch and which
+// would ship as a boot-time crash in every game.
 console.log(`[2/4] verifying the .aar carries "${version}"`)
 if (!dryRun) {
   const bytes = readFileSync(AAR_BUILT)
-  // classes.jar is DEFLATE-compressed inside the .aar, so search the entries.
-  const { execFileSync: exec } = await import('node:child_process')
   let found = false
   try {
+    // Two zip layers: the .aar holds classes.jar, and classes.jar is itself a
+    // zip whose entries are DEFLATE-compressed — scanning the jar's raw bytes
+    // never matches. Extract the jar, then read BuildConfig.class out of it.
     // unzip -p is present on the CI images and in Git Bash on Windows.
-    const jar = exec('unzip', ['-p', AAR_BUILT, 'classes.jar'], { maxBuffer: 64 * 1024 * 1024 })
-    found = jar.includes(Buffer.from(version, 'utf8'))
+    const tmp = mkdtempSync(join(tmpdir(), 'gog-aar-'))
+    const jarPath = join(tmp, 'classes.jar')
+    writeFileSync(jarPath, execFileSync('unzip', ['-p', AAR_BUILT, 'classes.jar'], { maxBuffer: 64 * 1024 * 1024 }))
+    const buildConfig = execFileSync('unzip', ['-p', jarPath, 'com/gog/sdk/BuildConfig.class'])
+    rmSync(tmp, { recursive: true, force: true })
+    found = buildConfig.includes(Buffer.from(version, 'utf8'))
   } catch {
     // No unzip available — fall back to scanning the raw container. Weaker (a
     // compressed match can hide) so a miss here is a warning, not a failure.
