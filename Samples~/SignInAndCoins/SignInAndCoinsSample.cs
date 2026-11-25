@@ -73,6 +73,15 @@ namespace Gog.Sdk.Samples
                 // A hub-launch sign-in failed; there is no call-site callback for these.
                 _status = "Launch sign-in failed: " + err.Code;
             };
+
+            // 3. iOS: a game the player installed from the hub (via the App Store) picks up the
+            //    hub's sign-in. Called once, AFTER subscribing, so a success reaches OnSignedIn
+            //    above and a failure reaches OnLaunchSignInFailed. Ok(false) means nothing to do
+            //    — always the answer off iOS — and the game simply carries on as a guest.
+            GogAuth.TrySignInFromInstallHandoff(res =>
+            {
+                if (res.Ok && !res.Value) Debug.Log("No install handoff — playing as guest.");
+            });
         }
 
         // ── SDK calls (the GogResult pattern, verbatim) ─────────────────────────

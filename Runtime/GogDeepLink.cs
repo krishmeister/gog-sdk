@@ -1,4 +1,5 @@
 using System;
+using Gog.Sdk.Internal;
 using UnityEngine;
 
 namespace Gog.Sdk
@@ -19,6 +20,12 @@ namespace Gog.Sdk
     /// <para>Call <see cref="Enable"/> once after <see cref="GogSdk.Initialize"/>, on the
     /// main thread. (The host/path stay <c>gog-api.fly.dev/launch</c> this slice; the flip to
     /// <c>link.godofgaming.online</c> is S7.7.)</para>
+    ///
+    /// <para>iOS: the same two Unity entry points deliver the game's Universal Links, and the
+    /// native iOS core validates and exchanges them (<c>link.godofgaming.online/launch/&lt;Game
+    /// ID&gt;</c>); <see cref="Host"/>/<see cref="PathPrefix"/>/<see cref="CodeParam"/> apply to
+    /// Android only. On iOS this is also the return leg of <see cref="GogAuth.SignInWithGog"/>,
+    /// so it must be enabled there.</para>
     /// </summary>
     public static class GogDeepLink
     {
@@ -40,6 +47,9 @@ namespace Gog.Sdk
 
         private static bool _enabled;
         private static string _lastHandledUrl;
+
+        // Read by GogAuth.SignInWithGog on iOS, whose return leg is a universal link.
+        internal static bool IsEnabled => _enabled;
 
         /// <summary>Start catching inbound App Links. Idempotent. Call once on the main
         /// thread after <see cref="GogSdk.Initialize"/>. Immediately processes the
@@ -72,6 +82,12 @@ namespace Gog.Sdk
             // A repeat is expected, not a misconfiguration, so it stays silent.
             if (url == _lastHandledUrl) return;
 
+            if (IosAuthBridge.IsActivePlatform)
+            {
+                HandleIosUrl(url);
+                return;
+            }
+
             var code = ExtractCode(url);
             if (string.IsNullOrEmpty(code))
             {
@@ -88,6 +104,26 @@ namespace Gog.Sdk
             _lastHandledUrl = url;
             OnSignInStarted?.Invoke();
             GogAuth.SignInFromLaunch(code); // launch path → OnSignedIn / OnLaunchSignInFailed
+        }
+
+        // iOS: the native core owns the launch-link format — host, /launch/<Game ID>, and where
+        // the code rides — so the Host/PathPrefix/CodeParam knobs above are not consulted. The
+        // synchronous check comes first so OnSignInStarted fires only for a link we will act on.
+        private static void HandleIosUrl(string url)
+        {
+            if (!IosAuthBridge.IsLaunchLink(url))
+            {
+                Debug.LogWarning(
+                    $"[GOG SDK] Ignoring a universal link that is not this game's GOG launch link: \"{url}\". " +
+                    "Expected https://link.godofgaming.online/launch/<your Game ID> carrying a code. If this IS " +
+                    "the launch link, the Game ID in Project Settings → GOG SDK does not match it (or " +
+                    "GogSdk.Initialize() has not run yet).");
+                return;
+            }
+
+            _lastHandledUrl = url;
+            OnSignInStarted?.Invoke();
+            GogAuth.SignInFromLaunchUrl(url); // native validates + exchanges → OnSignedIn / OnLaunchSignInFailed
         }
 
         /// <summary>Parse <c>https://{Host}{PathPrefix}…?{CodeParam}=&lt;code&gt;</c> and

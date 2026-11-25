@@ -58,6 +58,13 @@ namespace Gog.Sdk
     {
         private static AdSession _active;
 
+        // The public entry points' platform gate. iOS qualifies because everything up to the
+        // render is plain C# over UnityWebRequest; only the AdMob path is Android-native (JNI),
+        // and that resolves NoAd off Android without touching Java (see ShowAdmob).
+        private static bool IsSupportedPlatform =>
+            Application.platform == RuntimePlatform.Android ||
+            Application.platform == RuntimePlatform.IPhonePlayer;
+
         /// <summary>
         /// Fetch and render one interstitial. The callback fires exactly once, on the main
         /// thread, whatever happens.
@@ -77,10 +84,10 @@ namespace Gog.Sdk
                     "GogSdk.Initialize() was not called.", retryable: false));
                 return;
             }
-            if (Application.platform != RuntimePlatform.Android)
+            if (!IsSupportedPlatform)
             {
                 callback(GogResult<GogAdResult>.Fail(GogErrorCode.UnsupportedPlatform,
-                    "GOG Ads runs on Android only.", retryable: false));
+                    "GOG Ads runs on Android and iOS only.", retryable: false));
                 return;
             }
 
@@ -91,7 +98,7 @@ namespace Gog.Sdk
         /// <summary>
         /// The platform-independent entry: everything except the two gates above. Config arrives
         /// resolved, so this is drivable from a test on any platform against a loopback server —
-        /// the public entry is the only part that requires Android.
+        /// the public entry is the only part that requires a device (Android or iOS).
         ///
         /// <para>Deliberately does NOT require a signed-in session. <c>/ads/next</c> is a public,
         /// unauthenticated route and <c>user_id</c> is optional; gating on sign-in would deny
@@ -132,7 +139,7 @@ namespace Gog.Sdk
         /// </summary>
         internal static void AutoShowOnOpen()
         {
-            if (!GogSdk.IsInitialized || Application.platform != RuntimePlatform.Android) return;
+            if (!GogSdk.IsInitialized || !IsSupportedPlatform) return;
 
             GogSettings settings = GogSdk.Settings;
             ShowInternal(settings.ApiBaseUrl, settings.GameId, ResolveUserId(), result =>
@@ -203,6 +210,10 @@ namespace Gog.Sdk
         /// <para>A no-fill is routine and logs quietly. A build that cannot serve AdMob at all —
         /// GMA not resolved, no app id — warns loudly and names the fix, because it will miss
         /// every AdMob opportunity until rebuilt.</para>
+        ///
+        /// <para>Android only. <see cref="AndroidAdmobBridge"/> answers
+        /// <c>unsupported_platform</c> on any other platform BEFORE it touches JNI, so on iOS an
+        /// AdMob directive resolves as NoAd with a quiet log line and no Java is ever reached.</para>
         /// </summary>
         private static void ShowAdmob(AdSession session, GogAdDirective directive)
         {

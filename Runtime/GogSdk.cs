@@ -16,7 +16,8 @@ namespace Gog.Sdk
     {
         /// <summary>Package version — the C# half of the binding↔core handshake (§1.5).
         /// Mirrors package.json via the generated <see cref="GogSdkVersion"/>; asserted at
-        /// <see cref="Initialize"/> against the native core's build-time version over JNI.</summary>
+        /// <see cref="Initialize"/> against the native core's build-time version (over JNI on
+        /// Android, through <c>gog_bridge_sdk_version</c> on iOS).</summary>
         public const string Version = GogSdkVersion.Value;
 
         /// <summary>True between a successful <see cref="Initialize"/> and <see cref="Shutdown"/>.</summary>
@@ -67,7 +68,12 @@ namespace Gog.Sdk
             // Bring up the native bridge. This runs the binding↔core version handshake and
             // THROWS on a mismatch (§1.5) — before the SDK is marked initialized, so a stale or
             // hand-copied .aar cannot half-boot. Settings/IsInitialized are set only if it returns.
-            AndroidAuthBridge.Initialize(settings.GameId, settings.ApiBaseUrl, GogAuth.RaiseSignedOut);
+            // iPhone drives the Swift core (GOG.xcframework) with the same handshake; every other
+            // platform keeps the Android bridge, which is itself a no-op off Android.
+            if (IosAuthBridge.IsActivePlatform)
+                IosAuthBridge.Initialize(settings.GameId, settings.ApiBaseUrl, GogAuth.RaiseSignedOut);
+            else
+                AndroidAuthBridge.Initialize(settings.GameId, settings.ApiBaseUrl, GogAuth.RaiseSignedOut);
             Settings = settings;
             IsInitialized = true;
 
@@ -89,6 +95,7 @@ namespace Gog.Sdk
             GogDeepLink.ResetState();
             GogAds.ResetState();          // drop any live ad surface; resolve it exactly once (I2)
             AndroidAuthBridge.Shutdown();
+            IosAuthBridge.Shutdown();     // no-op unless the iOS core is live
             GogMainThreadDispatcher.Shutdown();
             Settings = null;
             IsInitialized = false;
@@ -107,6 +114,7 @@ namespace Gog.Sdk
             GogDeepLink.ResetState();
             GogAds.ResetState();
             AndroidAuthBridge.ResetStatics();
+            IosAuthBridge.ResetStatics();
             GogMainThreadDispatcher.ResetStatics();
         }
 

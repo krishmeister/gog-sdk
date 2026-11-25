@@ -6,9 +6,10 @@ SSO), and one coin balance follows the player between them. The SDK handles toke
 custody, session persistence, and the hub↔game handoff; your game never touches a
 refresh token.
 
-**Requires:** Unity **6000.0+** · Android (minSdk **24** / Android 7.0+). Other
-platforms compile but every call completes with `UnsupportedPlatform` — safe to leave
-in multi-platform projects.
+**Requires:** Unity **6000.0+** · Android (minSdk **24** / Android 7.0+) · iOS
+(**17.4+**, with `Runtime/Plugins/iOS/GOG.xcframework` in the package — see
+[iOS](#ios)). Other platforms compile but every call completes with
+`UnsupportedPlatform` — safe to leave in multi-platform projects.
 
 ## Install in three steps
 
@@ -53,6 +54,10 @@ public class GogBootstrap : MonoBehaviour
         };
         GogAuth.OnLaunchSignInFailed += err =>
             Debug.LogWarning("Launch sign-in failed: " + err.Code);
+
+        // iOS: pick up the hub's sign-in after an App Store install. Once, after subscribing.
+        // Ok(false) = nothing to do (always, off iOS) → carry on as a guest.
+        GogAuth.TrySignInFromInstallHandoff(res => { });
     }
 
     public void OnSignInButton()
@@ -68,6 +73,36 @@ public class GogBootstrap : MonoBehaviour
 
 Every asynchronous call takes exactly one callback and always calls it exactly once, on
 the main thread, with a `GogResult<T>`: check `Ok`, then use `Value` or `Error`.
+
+## iOS
+
+The same C# API runs on iPhone over the native Swift core, `GOG.xcframework`
+(`Runtime/Plugins/iOS/`, built on a Mac — see the README there). Building for iOS:
+
+- **Fails in Unity, on purpose,** when the Game ID is missing, when the package carries no
+  `GOG.xcframework`, or when *Target minimum iOS Version* is below **17.4** — each would
+  otherwise ship an app that cannot sign in or cannot launch.
+- **Wires the Xcode project for you** (`Editor/GogIosPostProcess.cs`): links the framework
+  into `UnityFramework`, Embeds & Signs it in the app, and merges into the app's
+  entitlements `keychain-access-groups` = `$(AppIdentifierPrefix)<your bundle id>` **then**
+  `$(AppIdentifierPrefix)online.godofgaming.shared` (your own group must stay first — it is
+  where your players' sessions are stored), plus `applinks:link.godofgaming.online`. Your
+  App ID needs the *Associated Domains* capability enabled.
+
+At runtime:
+
+- Launch links and the "Sign in with GOG" return both arrive as Universal Links through
+  `GogDeepLink` — so `GogDeepLink.Enable()` is **required** on iOS. "Sign in with GOG" opens
+  the GOG hub app; without the hub, the SDK opens its App Store page and the call completes
+  with `HubNotInstalled`. Coming back without finishing completes with `SignInCancelled`.
+- `GogAuth.TrySignInFromInstallHandoff(callback)` signs in a player who installed the game
+  from the hub via the App Store: the hub leaves a one-time code in a Keychain group shared by
+  GOG's apps, and this call exchanges it. Call it once after `Initialize()` and your event
+  subscriptions; `Ok(true)` = signed in (`OnSignedIn` fires too), `Ok(false)` = nothing to do
+  (always on Android and in the Editor), an error = the exchange failed (also raised on
+  `OnLaunchSignInFailed`). See [Getting started §7a](Documentation~/getting-started.md).
+- Coins and ads work exactly as on Android. AdMob directives resolve as `NoAd` on iOS
+  (house ads, image and video, are served normally).
 
 ## Learn more
 

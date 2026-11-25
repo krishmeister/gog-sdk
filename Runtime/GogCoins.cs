@@ -109,9 +109,9 @@ namespace Gog.Sdk
                 callback(GogResult<T>.Fail(GogErrorCode.NotInitialized, "GogSdk.Initialize() was not called.", retryable: false));
                 return false;
             }
-            if (Application.platform != RuntimePlatform.Android)
+            if (Application.platform != RuntimePlatform.Android && Application.platform != RuntimePlatform.IPhonePlayer)
             {
-                callback(GogResult<T>.Fail(GogErrorCode.UnsupportedPlatform, "GOG Coins runs on Android only.", retryable: false));
+                callback(GogResult<T>.Fail(GogErrorCode.UnsupportedPlatform, "GOG Coins runs on Android and iOS only.", retryable: false));
                 return false;
             }
             if (!GogAuth.CurrentSession.IsSignedIn)

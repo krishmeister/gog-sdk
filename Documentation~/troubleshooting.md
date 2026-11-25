@@ -53,11 +53,42 @@ check it for "limited ad serving" notices.
 
 **Symptom:** `GogSdk.Initialize()` throws with this message; the SDK refuses to start.
 **Cause:** the package's C# half and its bundled native `.aar` are from different
-versions — someone hand-copied an `.aar`, or the package install is stale/partial. The
+versions — someone hand-copied an `.aar` (or, on iOS, a `GOG.xcframework`), or the package install is stale/partial. The
 two ship together and are verified at boot precisely so a mismatch fails with this
 sentence instead of a random crash mid-session.
 **Fix:** exactly what the message says — reinstall the `com.gog.sdk` package cleanly.
 Never copy `.aar` files between projects or versions by hand.
+
+## iOS build fails: "GOG.xcframework is missing from the com.gog.sdk package"
+
+**Symptom:** an iOS build stops immediately with this message.
+**Cause:** the package has no `Runtime/Plugins/iOS/GOG.xcframework` — the native iOS core.
+Without it the Xcode project could not link (or would ship an app with no sign-in), so the
+SDK fails the build instead.
+**Fix:** install a `com.gog.sdk` release that includes the framework, or have it built on a
+Mac as described in `Runtime/Plugins/iOS/README.md`.
+
+## iOS build fails: "GOG.xcframework requires iOS 17.4 or newer"
+
+**Symptom:** an iOS build stops naming your *Target minimum iOS Version*.
+**Cause:** the native core is built for iOS 17.4+. A lower target would install on devices
+where the app crashes at launch.
+**Fix:** *Player Settings → Other Settings → Target minimum iOS Version* → `17.4` or higher.
+
+## iOS: "Sign in with GOG" never completes, or every launch link is ignored
+
+**Symptom:** the hub opens and the player approves, but back in the game the call completes
+with `SignInCancelled`; or a hub launch opens the game without signing in.
+**Cause 1:** `GogDeepLink.Enable()` was never called. On iOS both flows return through the
+game's Universal Link, which only reaches the SDK through `GogDeepLink` (the SDK logs a
+warning when `SignInWithGog` is called without it).
+**Cause 2:** the Universal Link is not routed to your app: the App ID lacks the *Associated
+Domains* capability, or GOG has not yet listed your Team ID + bundle id for your game (iOS
+caches the association file, sometimes for days). The Xcode console shows the SDK's warning
+with the received URL when a link arrives but is not this game's.
+**Fix:** call `Enable()` right after `GogSdk.Initialize()`; enable Associated Domains for the
+App ID; confirm the entitlements contain `applinks:link.godofgaming.online` (the SDK adds it
+at build time).
 
 ## Every call returns `NotInitialized`
 
