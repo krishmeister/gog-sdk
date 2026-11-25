@@ -1,7 +1,14 @@
 # Runtime/Plugins/iOS — the native iOS core
 
 This folder holds **`GOG.xcframework`**, the iOS counterpart of
-`../Android/gog-sdk-android-core.aar`. It is **not** checked in yet; it is a build product.
+`../Android/gog-sdk-android-core.aar`. It is a build product, checked in here.
+
+The current copy is **0.3.0**, built from `munjal0101/Gog-ios-sdk` commit `c4a7c55` by that repo's
+`Build GOG.xcframework` GitHub Actions workflow (on a GitHub-hosted Mac: compile + test gate,
+build, artifact verification). Each run publishes the zip on that repo's `xcframework-dist`
+branch; to update, unzip `GOG.xcframework.zip` from there over this folder. Its `.meta` has
+every platform switched off on purpose — `Editor/GogIosPostProcess.cs` wires it into the Xcode
+project, so Unity's plugin importer must not add a second copy.
 
 ## Where it comes from
 

@@ -1,0 +1,352 @@
+// swift-interface-format-version: 1.0
+// swift-compiler-version: Apple Swift version 6.1.2 (swiftlang-6.1.2.1.2 clang-1700.0.13.5)
+// swift-module-flags: -target arm64-apple-ios17.4 -enable-objc-interop -enable-library-evolution -swift-version 6 -enforce-exclusivity=checked -O -enable-experimental-feature DebugDescriptionMacro -module-name GOG -package-name gog_ios_sdk -module-alias Module___GOG=GOG -module-alias Module____StringProcessing=_StringProcessing -module-alias Module____SwiftConcurrencyShims=_SwiftConcurrencyShims -module-alias Module____Concurrency=_Concurrency -module-alias Module___UIKit=UIKit -module-alias Module___ObjectiveC=ObjectiveC -module-alias Module___QuartzCore=QuartzCore -module-alias Module___Security=Security -module-alias Module___CryptoKit=CryptoKit -module-alias Module___os=os -module-alias Module___UIGestureRecognizerSubclass=UIGestureRecognizerSubclass
+// swift-module-flags-ignorable:  -interface-compiler-version 6.1.2
+import Module___CryptoKit
+import Foundation
+import Foundation/*.Bundle*/
+import Foundation/*.ProcessInfo*/
+import Foundation/*.URL*/
+import Module___ObjectiveC
+import Module___QuartzCore
+import Module___Security
+import Swift
+import Module___UIKit.UIGestureRecognizerSubclass
+import Module___UIKit
+import Module____Concurrency
+import Module____StringProcessing
+import Module____SwiftConcurrencyShims
+import Module___os
+public enum GogAdOutcome : Swift.Sendable, Swift.Equatable {
+  case shown
+  case noAd
+  public static func == (a: Module___GOG.GogAdOutcome, b: Module___GOG.GogAdOutcome) -> Swift.Bool
+  public func hash(into hasher: inout Swift.Hasher)
+  public var hashValue: Swift.Int {
+    get
+  }
+}
+public struct GogAdResult : Swift.Sendable, Swift.Equatable {
+  public let outcome: Module___GOG.GogAdOutcome
+  public static func == (a: Module___GOG.GogAdResult, b: Module___GOG.GogAdResult) -> Swift.Bool
+}
+public enum GogAdmob {
+  @Module____Concurrency.MainActor public static func showInterstitial(adUnitId: Swift.String, timeout: Foundation.TimeInterval) async -> Module___GOG.GogAdmobResult
+}
+public struct GogAdmobResult : Swift.Sendable, Swift.Equatable {
+  public let shown: Swift.Bool
+  public let reason: Swift.String
+  public init(shown: Swift.Bool, reason: Swift.String)
+  public static func == (a: Module___GOG.GogAdmobResult, b: Module___GOG.GogAdmobResult) -> Swift.Bool
+}
+@_hasMissingDesignatedInitializers @Module____Concurrency.MainActor final public class GogAds {
+  @discardableResult
+  @Module____Concurrency.MainActor final public func showInterstitial() async throws -> Module___GOG.GogAdResult
+  @objc deinit
+}
+public typealias GogBridgeCallback = @convention(c) (Swift.Int32, Swift.UnsafePointer<Swift.CChar>?) -> Swift.Void
+public typealias GogBridgeEventCallback = @convention(c) (Swift.Int32, Swift.UnsafePointer<Swift.CChar>?) -> Swift.Void
+@_cdecl("gog_bridge_free")
+public func _gogBridgeFree(_ pointer: Swift.UnsafeMutablePointer<Swift.CChar>?)
+@_cdecl("gog_bridge_sdk_version")
+public func _gogBridgeSDKVersion() -> Swift.UnsafeMutablePointer<Swift.CChar>?
+@_cdecl("gog_bridge_initialize")
+public func _gogBridgeInitialize(_ gameId: Swift.UnsafePointer<Swift.CChar>?, _ apiBaseUrl: Swift.UnsafePointer<Swift.CChar>?, _ onEvent: Module___GOG.GogBridgeEventCallback?) -> Swift.UnsafeMutablePointer<Swift.CChar>?
+@_cdecl("gog_bridge_shutdown")
+public func _gogBridgeShutdown()
+@_cdecl("gog_bridge_sign_in_with_code")
+public func _gogBridgeSignInWithCode(_ requestId: Swift.Int32, _ code: Swift.UnsafePointer<Swift.CChar>?, _ callback: Module___GOG.GogBridgeCallback?)
+@_cdecl("gog_bridge_sign_in_with_gog")
+public func _gogBridgeSignInWithGog(_ requestId: Swift.Int32, _ callback: Module___GOG.GogBridgeCallback?)
+@_cdecl("gog_bridge_get_access_token")
+public func _gogBridgeGetAccessToken(_ requestId: Swift.Int32, _ callback: Module___GOG.GogBridgeCallback?)
+@_cdecl("gog_bridge_handle_launch_url")
+public func _gogBridgeHandleLaunchURL(_ requestId: Swift.Int32, _ url: Swift.UnsafePointer<Swift.CChar>?, _ callback: Module___GOG.GogBridgeCallback?)
+@_cdecl("gog_bridge_sign_in_from_install_handoff")
+public func _gogBridgeSignInFromInstallHandoff(_ requestId: Swift.Int32, _ callback: Module___GOG.GogBridgeCallback?)
+@_cdecl("gog_bridge_is_launch_link")
+public func _gogBridgeIsLaunchLink(_ url: Swift.UnsafePointer<Swift.CChar>?) -> Swift.Int32
+@_cdecl("gog_bridge_current_user_json")
+public func _gogBridgeCurrentUserJSON() -> Swift.UnsafeMutablePointer<Swift.CChar>?
+@_cdecl("gog_bridge_sign_out")
+public func _gogBridgeSignOut()
+@_hasMissingDesignatedInitializers @Module____Concurrency.MainActor final public class GogCoins {
+  @Module____Concurrency.MainActor convenience public init(configuration: Module___GOG.GogConfiguration, sessionProvider: @escaping Module___GOG.GogSessionProvider) throws
+  @Module____Concurrency.MainActor final public func balance() async throws -> Module___GOG.Wallet
+  @discardableResult
+  @Module____Concurrency.MainActor final public func earn(_ amount: Swift.Int64, reason: Swift.String? = nil) async throws -> Module___GOG.EarnResult
+  @discardableResult
+  @Module____Concurrency.MainActor final public func earn(_ amount: Swift.Int64, reason: Swift.String? = nil, idempotencyKey: Swift.String) async throws -> Module___GOG.EarnResult
+  @discardableResult
+  @Module____Concurrency.MainActor final public func spend(_ amount: Swift.Int64, reason: Swift.String? = nil) async throws -> Module___GOG.SpendResult
+  @discardableResult
+  @Module____Concurrency.MainActor final public func spend(_ amount: Swift.Int64, reason: Swift.String? = nil, idempotencyKey: Swift.String) async throws -> Module___GOG.SpendResult
+  @discardableResult
+  @Module____Concurrency.MainActor final public func reconcile() async -> [Module___GOG.ReconciledOp]
+  @Module____Concurrency.MainActor final public func pendingOperationCount() async -> Swift.Int
+  @objc deinit
+}
+public struct Wallet : Swift.Decodable, Swift.Sendable, Swift.Equatable {
+  public let balance: Swift.Int64
+  public static func == (a: Module___GOG.Wallet, b: Module___GOG.Wallet) -> Swift.Bool
+  public init(from decoder: any Swift.Decoder) throws
+}
+public enum WalletOpKind : Swift.String, Swift.Codable, Swift.Sendable {
+  case earn, spend
+  public init?(rawValue: Swift.String)
+  public typealias RawValue = Swift.String
+  public var rawValue: Swift.String {
+    get
+  }
+}
+public struct SpendResult : Swift.Decodable, Swift.Sendable, Swift.Equatable {
+  public let balance: Swift.Int64
+  public let transactionId: Swift.String
+  public let applied: Swift.Bool
+  public static func == (a: Module___GOG.SpendResult, b: Module___GOG.SpendResult) -> Swift.Bool
+  public init(from decoder: any Swift.Decoder) throws
+}
+public struct EarnResult : Swift.Decodable, Swift.Sendable, Swift.Equatable {
+  public let balance: Swift.Int64
+  public let transactionId: Swift.String
+  public let applied: Swift.Bool
+  public let awarded: Swift.Int64
+  public let sourceCoins: Swift.Int64
+  public let pendingSourceCoins: Swift.Int64
+  public static func == (a: Module___GOG.EarnResult, b: Module___GOG.EarnResult) -> Swift.Bool
+  public init(from decoder: any Swift.Decoder) throws
+}
+public struct ReconciledOp : Swift.Sendable, Swift.Equatable {
+  public let kind: Module___GOG.WalletOpKind
+  public let amount: Swift.Int64
+  public let balanceAfter: Swift.Int64
+  public let wasAlreadyApplied: Swift.Bool
+  public static func == (a: Module___GOG.ReconciledOp, b: Module___GOG.ReconciledOp) -> Swift.Bool
+}
+@_hasMissingDesignatedInitializers @Module____Concurrency.MainActor final public class GOG {
+  @Module____Concurrency.MainActor public static var shared: Module___GOG.GOG? {
+    get
+  }
+  @Module____Concurrency.MainActor public static var isInitialized: Swift.Bool {
+    get
+  }
+  @Module____Concurrency.MainActor public static var version: Swift.String {
+    get
+  }
+  @Module____Concurrency.MainActor final public let configuration: Module___GOG.GogConfiguration
+  @Module____Concurrency.MainActor final public let auth: Module___GOG.GogIdentity
+  @Module____Concurrency.MainActor final public let coins: Module___GOG.GogCoins
+  @Module____Concurrency.MainActor final public let ads: Module___GOG.GogAds
+  @Module____Concurrency.MainActor final public let playtime: Module___GOG.GogPlaytime
+  @discardableResult
+  @Module____Concurrency.MainActor public static func initialize(_ configuration: Module___GOG.GogConfiguration) async throws -> Module___GOG.GOG
+  @Module____Concurrency.MainActor public static func shutdown() async
+  @discardableResult
+  @Module____Concurrency.MainActor public static func handle(url: Foundation.URL) async throws -> Swift.Bool
+  @objc deinit
+}
+public struct GogConfiguration : Swift.Sendable {
+  public static let defaultBaseURL: Foundation.URL
+  public let baseURL: Foundation.URL
+  public let gameId: Foundation.UUID
+  public let bindingVersion: Swift.String?
+  public let launchCodeDelimiter: Module___GOG.LaunchCodeDelimiter
+  public let autoSignInFromLaunch: Swift.Bool
+  public let admobAppId: Swift.String?
+  public init(gameId: Foundation.UUID, baseURL: Foundation.URL = GogConfiguration.defaultBaseURL, bindingVersion: Swift.String? = nil, launchCodeDelimiter: Module___GOG.LaunchCodeDelimiter = .fragment, autoSignInFromLaunch: Swift.Bool = true, admobAppId: Swift.String? = nil)
+  public static func isValidAdmobAppId(_ id: Swift.String) -> Swift.Bool
+}
+public enum GogNetworkReason : Swift.Equatable, Swift.Sendable {
+  case offline
+  case timedOut
+  case cancelled
+  case unexpectedStatus(Swift.Int)
+  case transport(Swift.String)
+  public static func == (a: Module___GOG.GogNetworkReason, b: Module___GOG.GogNetworkReason) -> Swift.Bool
+}
+public enum GogError : Swift.Error, Swift.Equatable, Swift.Sendable {
+  case network(Module___GOG.GogNetworkReason, retryable: Swift.Bool)
+  case unauthorized
+  case rateLimited(retryAfter: Foundation.TimeInterval?)
+  case insufficientFunds
+  case earnTooLarge
+  case idempotencyKeyReused
+  case invalidInput(field: Swift.String?)
+  case unknownGame
+  case cityRequired
+  case server
+  case malformedResponse(missingField: Swift.String?)
+  case accountBanned
+  case signInCancelled
+  case hubNotInstalled
+  case invalidOrExpiredCode
+  case signInInProgress
+  case launchLinkInvalid(Module___GOG.LaunchLinkProblem)
+  case notConfigured(Swift.String)
+  public static func == (a: Module___GOG.GogError, b: Module___GOG.GogError) -> Swift.Bool
+}
+public enum LaunchLinkProblem : Swift.Equatable, Swift.Sendable {
+  case notHTTPS
+  case wrongHost(expected: Swift.String, got: Swift.String)
+  case hostRoleMismatch(host: Swift.String, path: Swift.String)
+  case notLaunchPath(Swift.String)
+  case malformedGameIdSegment(Swift.String)
+  case missingCode
+  case codeDeliveredInWrongPosition(expected: Swift.String, got: Swift.String)
+  case gameIdMismatch(expected: Foundation.UUID, got: Foundation.UUID)
+  public static func == (a: Module___GOG.LaunchLinkProblem, b: Module___GOG.LaunchLinkProblem) -> Swift.Bool
+}
+extension Module___GOG.GogError : Swift.CustomStringConvertible {
+  public var description: Swift.String {
+    get
+  }
+}
+public enum GogSDKVersion {
+  public static let value: Swift.String
+}
+public struct GogSessionSnapshot : Swift.Sendable, Swift.Equatable {
+  public let accessToken: Swift.String
+  public let userScope: Swift.String
+  public init(accessToken: Swift.String, userScope: Swift.String)
+  public static func == (a: Module___GOG.GogSessionSnapshot, b: Module___GOG.GogSessionSnapshot) -> Swift.Bool
+}
+public typealias GogSessionProvider = @Sendable () async throws -> Module___GOG.GogSessionSnapshot
+public struct GogSession : Swift.Sendable, Swift.Equatable {
+  public let isSignedIn: Swift.Bool
+  public let user: Module___GOG.GogUser?
+  public static func == (a: Module___GOG.GogSession, b: Module___GOG.GogSession) -> Swift.Bool
+}
+public enum GogSignOutReason : Swift.Sendable, Swift.Equatable {
+  case userRequested
+  case sessionExpired
+  public static func == (a: Module___GOG.GogSignOutReason, b: Module___GOG.GogSignOutReason) -> Swift.Bool
+  public func hash(into hasher: inout Swift.Hasher)
+  public var hashValue: Swift.Int {
+    get
+  }
+}
+public enum GogAuthEvent : Swift.Sendable, Swift.Equatable {
+  case signInStarted
+  case signedIn(Module___GOG.GogUser)
+  case signedOut(Module___GOG.GogSignOutReason)
+  case launchSignInFailed(Module___GOG.GogError)
+  public static func == (a: Module___GOG.GogAuthEvent, b: Module___GOG.GogAuthEvent) -> Swift.Bool
+}
+public enum GogHosts {
+  public static let hub: Swift.String
+  public static let link: Swift.String
+  public static let hubAppScheme: Swift.String
+  public static let hubAppStoreURL: Foundation.URL
+}
+public enum LaunchCodeDelimiter : Swift.String, Swift.Sendable, Swift.Equatable {
+  case fragment
+  case query
+  public init?(rawValue: Swift.String)
+  public typealias RawValue = Swift.String
+  public var rawValue: Swift.String {
+    get
+  }
+}
+public struct ReverseHandoffRequest : Swift.Sendable, Swift.Equatable {
+  public let url: Foundation.URL
+  public let codeChallenge: Swift.String
+  public static func == (a: Module___GOG.ReverseHandoffRequest, b: Module___GOG.ReverseHandoffRequest) -> Swift.Bool
+}
+public enum GogHubURL {
+  public static func reverseHandoff(gameId: Foundation.UUID, codeChallenge: Swift.String) -> Foundation.URL
+}
+public enum GogSignInFlow : Swift.Sendable, Swift.Equatable {
+  case forwardLaunch
+  case reverseHandoff
+  public static func == (a: Module___GOG.GogSignInFlow, b: Module___GOG.GogSignInFlow) -> Swift.Bool
+  public func hash(into hasher: inout Swift.Hasher)
+  public var hashValue: Swift.Int {
+    get
+  }
+}
+@_hasMissingDesignatedInitializers public actor GogIdentity {
+  public var isSignInInProgress: Swift.Bool {
+    get
+  }
+  @discardableResult
+  public func beginReverseHandoff() async throws -> Module___GOG.ReverseHandoffRequest
+  @discardableResult
+  public func signInWithGog(switchAccount: Swift.Bool = false) async throws -> Module___GOG.GogUser
+  @discardableResult
+  public func signIn(code: Swift.String, flow: Module___GOG.GogSignInFlow) async throws -> Module___GOG.GogUser
+  public func signOut(reason: Module___GOG.GogSignOutReason = .userRequested) async
+  public var currentUser: Module___GOG.GogUser? {
+    get
+  }
+  public var isSignedIn: Swift.Bool {
+    get
+  }
+  public var currentSession: Module___GOG.GogSession {
+    get
+  }
+  public func eventStream() async -> Module____Concurrency.AsyncStream<Module___GOG.GogAuthEvent>
+  public func getAccessToken() async throws -> Swift.String
+  @discardableResult
+  public func trySignInFromLaunch(url: Foundation.URL) async throws -> Swift.Bool
+  @discardableResult
+  public func trySignInFromLaunch() async throws -> Swift.Bool
+  public var hasCapturedLaunchCode: Swift.Bool {
+    get
+  }
+  @discardableResult
+  public func trySignInFromInstallHandoff() async throws -> Swift.Bool
+  public func snapshot() async throws -> Module___GOG.GogSessionSnapshot
+  nonisolated public var sessionProvider: Module___GOG.GogSessionProvider {
+    get
+  }
+  @discardableResult
+  public func forceRefresh() async throws -> Module___GOG.GogSessionSnapshot
+  @objc deinit
+  @available(iOS 13.0, tvOS 13.0, watchOS 6.0, macOS 10.15, *)
+  @_semantics("defaultActor") nonisolated final public var unownedExecutor: Module____Concurrency.UnownedSerialExecutor {
+    get
+  }
+}
+public struct GogUser : Swift.Sendable, Swift.Equatable, Swift.Codable {
+  public let id: Swift.String
+  public let email: Swift.String?
+  public static func == (a: Module___GOG.GogUser, b: Module___GOG.GogUser) -> Swift.Bool
+  public func encode(to encoder: any Swift.Encoder) throws
+  public init(from decoder: any Swift.Decoder) throws
+}
+public struct ValidatedLaunchLink : Swift.Sendable, Swift.Equatable {
+  public let gameId: Foundation.UUID
+  public let url: Foundation.URL
+  public static func == (a: Module___GOG.ValidatedLaunchLink, b: Module___GOG.ValidatedLaunchLink) -> Swift.Bool
+}
+public enum LaunchLinkValidator {
+  public static var expectedHost: Swift.String {
+    get
+  }
+  public static func validate(_ url: Foundation.URL, expecting gameId: Foundation.UUID) throws -> Module___GOG.ValidatedLaunchLink
+  public static func extractCode(from url: Foundation.URL, delimiter: Module___GOG.LaunchCodeDelimiter) throws -> Swift.String
+}
+@_hasMissingDesignatedInitializers public actor GogPlaytime {
+  public func onForeground() async
+  public func onBackground() async
+  public func onInput()
+  public func onInput(count: Swift.Int64, atMs: Swift.Int64)
+  public func tick() async
+  public func pendingSliceCount() async -> Swift.Int
+  @objc deinit
+  @available(iOS 13.0, tvOS 13.0, watchOS 6.0, macOS 10.15, *)
+  @_semantics("defaultActor") nonisolated final public var unownedExecutor: Module____Concurrency.UnownedSerialExecutor {
+    get
+  }
+}
+extension Module___GOG.GogAdOutcome : Swift.Hashable {}
+extension Module___GOG.GogAds : Swift.Sendable {}
+extension Module___GOG.GogCoins : Swift.Sendable {}
+extension Module___GOG.WalletOpKind : Swift.Equatable {}
+extension Module___GOG.WalletOpKind : Swift.Hashable {}
+extension Module___GOG.WalletOpKind : Swift.RawRepresentable {}
+extension Module___GOG.GOG : Swift.Sendable {}
+extension Module___GOG.GogSignOutReason : Swift.Hashable {}
+extension Module___GOG.LaunchCodeDelimiter : Swift.Hashable {}
+extension Module___GOG.LaunchCodeDelimiter : Swift.RawRepresentable {}
+extension Module___GOG.GogSignInFlow : Swift.Hashable {}
